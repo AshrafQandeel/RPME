@@ -83,20 +83,48 @@ const App: React.FC = () => {
 
   // --- INITIALIZATION ---
   useEffect(() => {
-    // Load local storage first
+    // 1. Check for Magic Link Configuration (Auto-Config for new devices)
+    const params = new URLSearchParams(window.location.search);
+    const configParam = params.get('config');
+    let importedSettings: Partial<AppSettings> | null = null;
+
+    if (configParam) {
+      try {
+        const jsonStr = atob(configParam);
+        const config = JSON.parse(jsonStr);
+        if (config.supabaseUrl && config.supabaseKey) {
+           importedSettings = { supabaseUrl: config.supabaseUrl, supabaseKey: config.supabaseKey };
+           // Clean URL
+           window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+           console.log("Configuration imported from magic link.");
+        }
+      } catch (e) {
+        console.error("Invalid config param");
+      }
+    }
+
+    // 2. Load settings from local storage
     const storedClients = localStorage.getItem('unsg_clients');
     const storedSanctions = localStorage.getItem('unsg_sanctions');
     const storedLogs = localStorage.getItem('unsg_logs');
     const storedSettings = localStorage.getItem('unsg_settings');
 
     let currentSettings = storedSettings ? JSON.parse(storedSettings) : DEFAULT_SETTINGS;
+    
+    // Apply imported settings if they exist
+    if (importedSettings) {
+      currentSettings = { ...currentSettings, ...importedSettings };
+      // Save immediately
+      localStorage.setItem('unsg_settings', JSON.stringify(currentSettings));
+    }
+
     setSettings(currentSettings);
 
-    // Init Cloud if credentials exist
+    // 3. Init Cloud if credentials exist
     const connected = initSupabase(currentSettings);
     setIsCloudConnected(connected);
 
-    // Initial Data Load Logic (runs once on mount)
+    // 4. Initial Data Load Logic (runs once on mount)
     const initialLoad = async () => {
       setCloudError(null); 
       if (connected) {
@@ -143,7 +171,11 @@ const App: React.FC = () => {
 
     if (storedLogs) setLogs(JSON.parse(storedLogs));
     
-    addLog('SYSTEM_INIT', `Application started. Cloud Mode: ${connected ? 'Active' : 'Offline'}`, 'SUCCESS');
+    if (importedSettings) {
+        addLog('SYSTEM_INIT', 'New device configured via Magic Link.', 'SUCCESS');
+    } else {
+        addLog('SYSTEM_INIT', `Application started. Cloud Mode: ${connected ? 'Active' : 'Offline'}`, 'SUCCESS');
+    }
   }, [addLog]);
 
   // Reactive Effect: Fetch clients whenever cloud connection is established (e.g. after entering settings)

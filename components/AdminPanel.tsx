@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SystemLog, AppSettings } from '../types';
-import { FileDown, ShieldCheck, RefreshCw, Save, Globe, Database, Upload, Download, AlertCircle, Cloud, Terminal, Check } from 'lucide-react';
+import { FileDown, ShieldCheck, RefreshCw, Save, Globe, Database, Upload, Download, AlertCircle, Cloud, Terminal, Check, Smartphone, Link as LinkIcon, Copy } from 'lucide-react';
 
 interface AdminPanelProps {
   logs: SystemLog[];
@@ -25,6 +25,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [hasChanges, setHasChanges] = useState(false);
   const [showSql, setShowSql] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
+  const [showQr, setShowQr] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync local settings with prop settings only if user hasn't made unsaved changes
@@ -53,6 +55,27 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         onImportData(e.target.files[0]);
       }
       e.target.value = '';
+    }
+  };
+
+  const getMagicLink = () => {
+    if (!settings.supabaseUrl || !settings.supabaseKey) return '';
+    const config = {
+        supabaseUrl: settings.supabaseUrl,
+        supabaseKey: settings.supabaseKey
+    };
+    const encoded = btoa(JSON.stringify(config));
+    // Build link to current root, adding param
+    const baseUrl = window.location.href.split('?')[0].split('#')[0];
+    return `${baseUrl}?config=${encoded}`;
+  };
+
+  const copyMagicLink = () => {
+    const link = getMagicLink();
+    if (link) {
+      navigator.clipboard.writeText(link);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2000);
     }
   };
 
@@ -149,11 +172,50 @@ create policy "Public Access" on clients for all
           </div>
         </div>
 
-        <div className="flex justify-end mb-4">
+        <div className="flex justify-between items-center mb-4 border-t border-gray-100 pt-4">
+           {settings.supabaseUrl && settings.supabaseKey ? (
+             <div className="flex-1">
+               <button 
+                  onClick={() => setShowQr(!showQr)}
+                  className="flex items-center gap-2 text-sm text-indigo-600 font-medium hover:text-indigo-800 transition-colors"
+               >
+                 <Smartphone size={18} /> Connect Mobile / New Device
+               </button>
+               
+               {showQr && (
+                 <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 flex flex-col sm:flex-row gap-6 items-center">
+                    <div className="bg-white p-2 rounded shadow-sm">
+                       <img 
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(getMagicLink())}`} 
+                          alt="Scan to Connect"
+                          className="w-32 h-32" 
+                        />
+                    </div>
+                    <div className="flex-1">
+                       <h4 className="font-semibold text-gray-900 mb-1">Scan to Sync</h4>
+                       <p className="text-sm text-gray-600 mb-3">
+                         Scan this code with your phone camera, or copy the link below to open on another computer.
+                         This will automatically configure the database connection.
+                       </p>
+                       <button 
+                         onClick={copyMagicLink}
+                         className="flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-3 py-2 rounded text-sm font-medium transition-colors w-full sm:w-auto justify-center"
+                       >
+                         {copiedLink ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
+                         {copiedLink ? "Link Copied!" : "Copy Magic Link"}
+                       </button>
+                    </div>
+                 </div>
+               )}
+             </div>
+           ) : (
+             <div className="text-sm text-gray-400 italic">Save connection settings to enable device syncing.</div>
+           )}
+
            {hasChanges && (localSettings.supabaseUrl !== settings.supabaseUrl || localSettings.supabaseKey !== settings.supabaseKey) && (
              <button 
                 onClick={handleSave}
-                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded transition-colors"
+                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded transition-colors ml-4"
              >
                Save Connection Settings
              </button>
