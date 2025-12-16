@@ -1,6 +1,6 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { SystemLog, AppSettings } from '../types';
-import { FileDown, ShieldCheck, RefreshCw, Save, Globe, Database, Upload, Download, AlertCircle, Cloud, Terminal } from 'lucide-react';
+import { FileDown, ShieldCheck, RefreshCw, Save, Globe, Database, Upload, Download, AlertCircle, Cloud, Terminal, Check } from 'lucide-react';
 
 interface AdminPanelProps {
   logs: SystemLog[];
@@ -24,16 +24,28 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [hasChanges, setHasChanges] = useState(false);
   const [showSql, setShowSql] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Sync local settings with prop settings only if user hasn't made unsaved changes
+  // This prevents overwriting user input while keeping timestamps up to date if they are just viewing
+  useEffect(() => {
+    if (!hasChanges) {
+      setLocalSettings(settings);
+    }
+  }, [settings, hasChanges]);
 
   const handleChange = (field: keyof AppSettings, value: any) => {
     setLocalSettings(prev => ({ ...prev, [field]: value }));
     setHasChanges(true);
+    setSaveMessage(null);
   };
 
   const handleSave = () => {
     onUpdateSettings(localSettings);
     setHasChanges(false);
+    setSaveMessage("Settings saved successfully.");
+    setTimeout(() => setSaveMessage(null), 3000);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -69,28 +81,42 @@ create policy "Public Access" on clients for all using (true);
   `.trim();
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-6 pb-20">
+      <div className="flex justify-between items-center sticky top-0 bg-gray-50/95 backdrop-blur z-10 py-4 border-b border-gray-200 -mx-4 px-4 md:mx-0 md:px-0">
         <h2 className="text-2xl font-bold text-gray-800">System Administration</h2>
-        {hasChanges && (
+        <div className="flex items-center gap-3">
+          {saveMessage && (
+            <span className="text-sm text-green-600 flex items-center gap-1 font-medium animate-fade-in">
+              <Check size={16} /> {saveMessage}
+            </span>
+          )}
           <button 
             onClick={handleSave}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors shadow-sm"
+            disabled={!hasChanges}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors shadow-sm font-medium ${
+              hasChanges 
+                ? 'bg-indigo-600 hover:bg-indigo-700 text-white' 
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
           >
             <Save size={18} />
-            Save Changes
+            {hasChanges ? 'Save Changes' : 'Saved'}
           </button>
-        )}
+        </div>
       </div>
 
       {/* Cloud DB Configuration */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-blue-500">
-        <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-          <Cloud size={20} className="text-blue-500"/> Cloud Database Connection (Supabase)
-        </h3>
-        <p className="text-sm text-gray-600 mb-4">
-          Connect a Supabase project to sync clients across multiple browsers/devices.
-        </p>
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+              <Cloud size={20} className="text-blue-500"/> Cloud Database Connection (Supabase)
+            </h3>
+            <p className="text-sm text-gray-600 mt-1">
+              Connect a Supabase project to sync clients across multiple browsers/devices.
+            </p>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
           <div>
@@ -98,7 +124,7 @@ create policy "Public Access" on clients for all using (true);
             <input 
               type="text" 
               placeholder="https://xyz.supabase.co"
-              className="w-full text-sm border border-gray-300 rounded-lg p-2 text-gray-600 font-mono"
+              className="w-full text-sm border border-gray-300 rounded-lg p-2 text-gray-600 font-mono focus:ring-2 focus:ring-blue-500 outline-none"
               value={localSettings.supabaseUrl || ''}
               onChange={(e) => handleChange('supabaseUrl', e.target.value)}
             />
@@ -108,11 +134,23 @@ create policy "Public Access" on clients for all using (true);
             <input 
               type="password" 
               placeholder="eyJhbGciOiJIUzI1NiIsInR5..."
-              className="w-full text-sm border border-gray-300 rounded-lg p-2 text-gray-600 font-mono"
+              className="w-full text-sm border border-gray-300 rounded-lg p-2 text-gray-600 font-mono focus:ring-2 focus:ring-blue-500 outline-none"
               value={localSettings.supabaseKey || ''}
               onChange={(e) => handleChange('supabaseKey', e.target.value)}
             />
           </div>
+        </div>
+
+        <div className="flex justify-end mb-4">
+           {/* Inline save for this section specifically if user prefers */}
+           {hasChanges && (localSettings.supabaseUrl !== settings.supabaseUrl || localSettings.supabaseKey !== settings.supabaseKey) && (
+             <button 
+                onClick={handleSave}
+                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded transition-colors"
+             >
+               Save Connection Settings
+             </button>
+           )}
         </div>
 
         <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
