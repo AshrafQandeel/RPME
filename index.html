@@ -12,6 +12,21 @@
         background-color: #f3f4f6;
       }
     </style>
+    <script>
+      window.addEventListener('error', function(event) {
+        const root = document.getElementById('root');
+        if (root && root.innerHTML === '') {
+          root.innerHTML = `
+            <div style="padding: 2rem; color: #ef4444; font-family: sans-serif;">
+              <h1 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem;">Application Startup Error</h1>
+              <p style="margin-bottom: 0.5rem;">The application failed to start correctly.</p>
+              <pre style="background: #fee2e2; padding: 1rem; border-radius: 0.5rem; overflow: auto;">${event.message}</pre>
+              <p style="margin-top: 1rem; font-size: 0.875rem; color: #666;">Check the browser console (F12) for more details.</p>
+            </div>
+          `;
+        }
+      });
+    </script>
   <script type="importmap">
 {
   "imports": {
