@@ -1,6 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { SystemLog, AppSettings } from '../types';
-import { FileDown, ShieldCheck, Clock, RefreshCw, Save, Globe, Database, Upload, Download, AlertCircle } from 'lucide-react';
+import { FileDown, ShieldCheck, RefreshCw, Save, Globe, Database, Upload, Download, AlertCircle, Cloud, Terminal } from 'lucide-react';
 
 interface AdminPanelProps {
   logs: SystemLog[];
@@ -23,6 +23,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 }) => {
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [hasChanges, setHasChanges] = useState(false);
+  const [showSql, setShowSql] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = (field: keyof AppSettings, value: any) => {
@@ -40,10 +41,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       if (window.confirm("WARNING: This will overwrite your current data with the backup file. Are you sure?")) {
         onImportData(e.target.files[0]);
       }
-      // Reset input
       e.target.value = '';
     }
   };
+
+  const sqlScript = `
+-- Run this in your Supabase SQL Editor to set up the system
+create table clients (
+  id text primary key,
+  "firstName" text not null,
+  "middleName" text,
+  "lastName" text not null,
+  nationality text,
+  "passportNumber" text,
+  type text,
+  "residenceCountry" text,
+  remarks text,
+  "createdAt" text,
+  "lastScreenedAt" text,
+  "riskLevel" text,
+  "matchId" text
+);
+
+-- Enable Row Level Security (optional for demo, recommended for prod)
+alter table clients enable row level security;
+create policy "Public Access" on clients for all using (true);
+  `.trim();
 
   return (
     <div className="space-y-6">
@@ -60,15 +83,55 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         )}
       </div>
 
-      {/* Data Persistence Warning */}
-      <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg flex items-start gap-3">
-        <AlertCircle className="text-amber-600 shrink-0 mt-0.5" size={20} />
-        <div>
-          <h4 className="font-semibold text-amber-800">Local Storage Mode</h4>
-          <p className="text-sm text-amber-700 mt-1">
-            This application is currently using browser storage. Data will not automatically sync across different devices or browsers. 
-            Use the <strong>Data Portability</strong> section below to move your data manually.
-          </p>
+      {/* Cloud DB Configuration */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-blue-500">
+        <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
+          <Cloud size={20} className="text-blue-500"/> Cloud Database Connection (Supabase)
+        </h3>
+        <p className="text-sm text-gray-600 mb-4">
+          Connect a Supabase project to sync clients across multiple browsers/devices.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Project URL</label>
+            <input 
+              type="text" 
+              placeholder="https://xyz.supabase.co"
+              className="w-full text-sm border border-gray-300 rounded-lg p-2 text-gray-600 font-mono"
+              value={localSettings.supabaseUrl || ''}
+              onChange={(e) => handleChange('supabaseUrl', e.target.value)}
+            />
+          </div>
+           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">API Key (Anon/Public)</label>
+            <input 
+              type="password" 
+              placeholder="eyJhbGciOiJIUzI1NiIsInR5..."
+              className="w-full text-sm border border-gray-300 rounded-lg p-2 text-gray-600 font-mono"
+              value={localSettings.supabaseKey || ''}
+              onChange={(e) => handleChange('supabaseKey', e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+           <button 
+             onClick={() => setShowSql(!showSql)}
+             className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-blue-600 transition-colors w-full justify-between"
+           >
+             <span className="flex items-center gap-2"><Terminal size={16}/> View Database Setup Script</span>
+             <span className="text-xs text-slate-400">{showSql ? 'Hide' : 'Show'}</span>
+           </button>
+           
+           {showSql && (
+             <div className="mt-3">
+               <p className="text-xs text-slate-500 mb-2">Copy and run this SQL in your Supabase SQL Editor to create the required table:</p>
+               <pre className="bg-slate-900 text-slate-50 p-3 rounded text-xs overflow-x-auto font-mono">
+                 {sqlScript}
+               </pre>
+             </div>
+           )}
         </div>
       </div>
 
@@ -182,8 +245,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           </div>
         </div>
       </div>
-
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+      
+       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="p-4 border-b border-gray-200 flex justify-between items-center">
           <h3 className="font-bold text-gray-800">System Audit Logs</h3>
           <button className="text-sm text-gray-500 flex items-center gap-1 hover:text-indigo-600">

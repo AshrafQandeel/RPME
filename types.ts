@@ -74,4 +74,7 @@ export interface AppSettings {
   sourceUrl: string;
   lastSync: string;
   nextSync: string;
+  // Cloud DB Config
+  supabaseUrl?: string;
+  supabaseKey?: string;
 }

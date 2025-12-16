@@ -9,6 +9,7 @@ import { Client, SanctionEntry, SystemLog, RiskLevel, EntityType, AppSettings } 
 import { generateMockSanctions, QATAR_MOCK_SANCTIONS } from './services/mockData';
 import { screenClient } from './services/screeningEngine';
 import { fetchFromUrl, parseUNSanctionsXML, OFFICIAL_UN_XML_URL } from './services/unSanctionsService';
+import { initSupabase, fetchCloudClients, addCloudClient, deleteCloudClient, updateCloudClient } from './services/cloudDb';
 
 const DEFAULT_SETTINGS: AppSettings = {
   autoSync: true,
@@ -25,6 +26,7 @@ const App: React.FC = () => {
   const [logs, setLogs] = useState<SystemLog[]>([]);
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isCloudConnected, setIsCloudConnected] = useState(false);
 
   // --- LOGIC ---
   const addLog = useCallback((action: string, details: string, status: 'SUCCESS' | 'FAILURE' | 'WARNING') => {
@@ -52,25 +54,57 @@ const App: React.FC = () => {
 
   // --- INITIALIZATION ---
   useEffect(() => {
+    // Load local storage first
     const storedClients = localStorage.getItem('unsg_clients');
     const storedSanctions = localStorage.getItem('unsg_sanctions');
     const storedLogs = localStorage.getItem('unsg_logs');
     const storedSettings = localStorage.getItem('unsg_settings');
 
-    if (storedClients) setClients(JSON.parse(storedClients));
-    else {
-        const seedClients: Client[] = [
-            {
-                id: '1', firstName: 'John', lastName: 'Doe', nationality: 'USA', type: 'Individual' as any,
-                residenceCountry: 'USA', createdAt: new Date().toISOString(), riskLevel: RiskLevel.NONE
-            },
-            {
-                id: '2', firstName: 'Victor', lastName: 'Bout', nationality: 'Russia', type: 'Individual' as any,
-                residenceCountry: 'Russia', createdAt: new Date().toISOString(), riskLevel: RiskLevel.NONE
-            }
-        ];
-        setClients(seedClients);
-    }
+    let currentSettings = storedSettings ? JSON.parse(storedSettings) : DEFAULT_SETTINGS;
+    setSettings(currentSettings);
+
+    // Init Cloud if credentials exist
+    const connected = initSupabase(currentSettings);
+    setIsCloudConnected(connected);
+
+    // Initial Data Load Logic
+    const loadData = async () => {
+      if (connected) {
+        try {
+          const cloudClients = await fetchCloudClients();
+          if (cloudClients) {
+            setClients(cloudClients);
+            addLog('CLOUD_SYNC', `Loaded ${cloudClients.length} clients from Supabase.`, 'SUCCESS');
+          } else {
+             // Fallback if cloud returns null/empty? Not typically if connected.
+             // But if table is empty, we might want to sync local to cloud? 
+             // For now, cloud is source of truth if connected.
+             setClients([]);
+          }
+        } catch (err) {
+          addLog('CLOUD_ERROR', 'Failed to fetch clients from cloud. Using local.', 'FAILURE');
+          if (storedClients) setClients(JSON.parse(storedClients));
+        }
+      } else {
+        // Local Mode
+        if (storedClients) setClients(JSON.parse(storedClients));
+        else {
+            const seedClients: Client[] = [
+                {
+                    id: '1', firstName: 'John', lastName: 'Doe', nationality: 'USA', type: 'Individual' as any,
+                    residenceCountry: 'USA', createdAt: new Date().toISOString(), riskLevel: RiskLevel.NONE
+                },
+                {
+                    id: '2', firstName: 'Victor', lastName: 'Bout', nationality: 'Russia', type: 'Individual' as any,
+                    residenceCountry: 'Russia', createdAt: new Date().toISOString(), riskLevel: RiskLevel.NONE
+                }
+            ];
+            setClients(seedClients);
+        }
+      }
+    };
+
+    loadData();
 
     if (storedSanctions) {
       setSanctions(JSON.parse(storedSanctions));
@@ -80,9 +114,8 @@ const App: React.FC = () => {
     }
 
     if (storedLogs) setLogs(JSON.parse(storedLogs));
-    if (storedSettings) setSettings(JSON.parse(storedSettings));
     
-    addLog('SYSTEM_INIT', 'Application started.', 'SUCCESS');
+    addLog('SYSTEM_INIT', `Application started. Cloud Mode: ${connected ? 'Active' : 'Offline'}`, 'SUCCESS');
   }, [addLog]);
 
   // --- PERSISTENCE ---
@@ -100,6 +133,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     localStorage.setItem('unsg_settings', JSON.stringify(settings));
+    // Re-init Supabase if settings change
+    const connected = initSupabase(settings);
+    setIsCloudConnected(connected);
   }, [settings]);
 
 
@@ -126,16 +162,12 @@ const App: React.FC = () => {
     try {
       // 1. Fetch from Qatar (Simulated)
       await new Promise(resolve => setTimeout(resolve, 1000));
-      const fetchedQatarData = [...QATAR_MOCK_SANCTIONS]; // In real app, fetch from URL
+      const fetchedQatarData = [...QATAR_MOCK_SANCTIONS]; 
 
       // 2. Fetch from UN
       let newUnData: SanctionEntry[] = [];
       try {
-        // Attempt real fetch first
         if (settings.sourceUrl) {
-           // Note: This will likely fail with CORS in a browser without a proxy
-           // but we include the logic for the "System Requirement"
-           // We catch it and fallback to mock to ensure demo stability.
            try {
              newUnData = await fetchFromUrl(settings.sourceUrl);
              addLog('SANCTION_UPDATE', `Successfully fetched live UN XML.`, 'SUCCESS');
@@ -145,7 +177,6 @@ const App: React.FC = () => {
            }
         }
       } catch (err) {
-        // Fallback to simulation
         addLog('SANCTION_UPDATE', 'Direct fetch restricted (CORS). Using simulation data.', 'WARNING');
         newUnData = generateMockSanctions(50 + (sanctions.filter(s => s.source === 'UN Consolidated').length));
       }
@@ -155,6 +186,13 @@ const App: React.FC = () => {
       
       // Update Screening
       const updatedClients = runScreening(clients, combinedData);
+      
+      // If cloud connected, update clients in cloud with new screening results
+      if (isCloudConnected) {
+        // Doing this for all clients might be heavy, but ok for demo
+        updatedClients.forEach(c => updateCloudClient(c).catch(e => console.error("Update fail", e)));
+      }
+
       setClients(updatedClients);
       const matchCount = updatedClients.filter(c => c.riskLevel !== RiskLevel.NONE).length;
 
@@ -191,13 +229,11 @@ const App: React.FC = () => {
           throw new Error("No valid entries found in XML.");
         }
 
-        // Merge with existing non-UN entries (e.g. keep Qatar entries)
         const otherEntries = sanctions.filter(s => s.source !== 'UN Consolidated');
         const combinedData = [...otherEntries, ...parsedEntries];
         
         setSanctions(combinedData);
         
-        // Re-screen
         const updatedClients = runScreening(clients, combinedData);
         setClients(updatedClients);
         
@@ -216,7 +252,7 @@ const App: React.FC = () => {
   const handleExportDatabase = () => {
     const backupData = {
       meta: {
-        version: '1.1.1',
+        version: '1.2.0',
         exportDate: new Date().toISOString(),
         appName: 'UNSanctionGuard'
       },
@@ -269,7 +305,7 @@ const App: React.FC = () => {
     reader.readAsText(file);
   };
 
-  const handleAddClient = (newClientData: Omit<Client, 'id' | 'createdAt' | 'riskLevel'>) => {
+  const handleAddClient = async (newClientData: Omit<Client, 'id' | 'createdAt' | 'riskLevel'>) => {
     const newClient: Client = {
       ...newClientData,
       id: Math.random().toString(36).substr(2, 9),
@@ -287,12 +323,29 @@ const App: React.FC = () => {
         addLog('CLIENT_ADD', `Added ${newClient.firstName} ${newClient.lastName} - Clean`, 'SUCCESS');
     }
 
+    if (isCloudConnected) {
+      try {
+        await addCloudClient(newClient);
+        addLog('CLOUD_ADD', `Client synced to cloud DB.`, 'SUCCESS');
+      } catch (e: any) {
+        addLog('CLOUD_ERROR', `Failed to save to cloud: ${e.message}`, 'FAILURE');
+      }
+    }
+
     setClients(prev => [newClient, ...prev]);
   };
 
-  const handleDeleteClient = (id: string) => {
+  const handleDeleteClient = async (id: string) => {
     setClients(prev => prev.filter(c => c.id !== id));
     addLog('CLIENT_DELETE', `Deleted client ${id}`, 'SUCCESS');
+
+    if (isCloudConnected) {
+      try {
+        await deleteCloudClient(id);
+      } catch (e: any) {
+        addLog('CLOUD_ERROR', `Failed to delete from cloud: ${e.message}`, 'FAILURE');
+      }
+    }
   };
 
   return (
