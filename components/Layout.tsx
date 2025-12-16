@@ -1,12 +1,13 @@
 import React from 'react';
-import { LayoutDashboard, Users, ShieldAlert, FileText, Settings, Globe } from 'lucide-react';
+import { LayoutDashboard, Users, ShieldAlert, FileText, Settings, Globe, AlertCircle } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 interface LayoutProps {
   children: React.ReactNode;
+  cloudError?: string | null;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+const Layout: React.FC<LayoutProps> = ({ children, cloudError }) => {
   const location = useLocation();
 
   const navItems = [
@@ -65,31 +66,49 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <span>Sanctions: Synced</span>
             </div>
             <div className="flex items-center gap-2 mt-1">
-              <span className="w-2 h-2 rounded-full bg-green-500"></span>
-              <span>Database: Connected</span>
+              <span className={`w-2 h-2 rounded-full ${cloudError ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></span>
+              <span>Database: {cloudError ? 'Error' : 'Connected'}</span>
             </div>
           </div>
         </div>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 ml-64 overflow-y-auto">
-        <header className="bg-white border-b border-gray-200 sticky top-0 z-20 px-8 py-4 flex justify-between items-center shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-800">
-            {navItems.find(n => n.path === location.pathname)?.label || 'Overview'}
-          </h2>
-          <div className="flex items-center gap-4">
-            <div className="text-right">
-              <p className="text-sm font-medium text-gray-900">Compliance Officer</p>
-              <p className="text-xs text-gray-500">Logged in</p>
-            </div>
-            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold border border-blue-200">
-              CO
-            </div>
+      <main className="flex-1 ml-64 overflow-y-auto flex flex-col h-full">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm flex-shrink-0">
+           {/* Alert Banner */}
+           {cloudError && (
+              <div className="bg-red-600 text-white px-8 py-3 flex items-center justify-between animate-fade-in">
+                  <div className="flex items-center gap-3">
+                      <AlertCircle size={20} className="shrink-0" />
+                      <span className="text-sm font-medium">{cloudError}</span>
+                  </div>
+                  <Link 
+                    to="/admin" 
+                    className="bg-white text-red-600 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider hover:bg-red-50 transition-colors whitespace-nowrap"
+                  >
+                    Fix in Admin
+                  </Link>
+              </div>
+           )}
+           
+           <div className="px-8 py-4 flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-gray-800">
+                {navItems.find(n => n.path === location.pathname)?.label || 'Overview'}
+              </h2>
+              <div className="flex items-center gap-4">
+                <div className="text-right">
+                  <p className="text-sm font-medium text-gray-900">Compliance Officer</p>
+                  <p className="text-xs text-gray-500">Logged in</p>
+                </div>
+                <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold border border-blue-200">
+                  CO
+                </div>
+              </div>
           </div>
         </header>
 
-        <div className="p-8 max-w-7xl mx-auto">
+        <div className="p-8 max-w-7xl mx-auto w-full flex-1">
           {children}
         </div>
       </main>
