@@ -28,7 +28,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync local settings with prop settings only if user hasn't made unsaved changes
-  // This prevents overwriting user input while keeping timestamps up to date if they are just viewing
   useEffect(() => {
     if (!hasChanges) {
       setLocalSettings(settings);
@@ -58,26 +57,35 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const sqlScript = `
--- Run this in your Supabase SQL Editor to set up the system
+-- 1. DROP old table if exists (WARNING: DELETES DATA)
+drop table if exists clients;
+
+-- 2. Create table with standard snake_case columns
 create table clients (
   id text primary key,
-  "firstName" text not null,
-  "middleName" text,
-  "lastName" text not null,
+  first_name text not null,
+  middle_name text,
+  last_name text not null,
+  dob text,
   nationality text,
-  "passportNumber" text,
+  passport_number text,
   type text,
-  "residenceCountry" text,
+  residence_country text,
   remarks text,
-  "createdAt" text,
-  "lastScreenedAt" text,
-  "riskLevel" text,
-  "matchId" text
+  created_at text,
+  last_screened_at text,
+  risk_level text,
+  match_id text
 );
 
--- Enable Row Level Security (optional for demo, recommended for prod)
+-- 3. Enable Row Level Security
 alter table clients enable row level security;
-create policy "Public Access" on clients for all using (true);
+
+-- 4. Create Policy for Insert/Select/Update/Delete
+-- Note: 'with check (true)' is required for INSERTs to work with anon key
+create policy "Public Access" on clients for all 
+  using (true) 
+  with check (true);
   `.trim();
 
   return (
@@ -142,7 +150,6 @@ create policy "Public Access" on clients for all using (true);
         </div>
 
         <div className="flex justify-end mb-4">
-           {/* Inline save for this section specifically if user prefers */}
            {hasChanges && (localSettings.supabaseUrl !== settings.supabaseUrl || localSettings.supabaseKey !== settings.supabaseKey) && (
              <button 
                 onClick={handleSave}
@@ -158,13 +165,13 @@ create policy "Public Access" on clients for all using (true);
              onClick={() => setShowSql(!showSql)}
              className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-blue-600 transition-colors w-full justify-between"
            >
-             <span className="flex items-center gap-2"><Terminal size={16}/> View Database Setup Script</span>
+             <span className="flex items-center gap-2"><Terminal size={16}/> Database Setup Script (Updated v1.2)</span>
              <span className="text-xs text-slate-400">{showSql ? 'Hide' : 'Show'}</span>
            </button>
            
            {showSql && (
              <div className="mt-3">
-               <p className="text-xs text-slate-500 mb-2">Copy and run this SQL in your Supabase SQL Editor to create the required table:</p>
+               <p className="text-xs text-red-500 mb-2 font-bold">IMPORTANT: Run this script in Supabase to correct the table structure:</p>
                <pre className="bg-slate-900 text-slate-50 p-3 rounded text-xs overflow-x-auto font-mono">
                  {sqlScript}
                </pre>

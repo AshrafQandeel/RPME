@@ -81,8 +81,9 @@ const App: React.FC = () => {
              // For now, cloud is source of truth if connected.
              setClients([]);
           }
-        } catch (err) {
-          addLog('CLOUD_ERROR', 'Failed to fetch clients from cloud. Using local.', 'FAILURE');
+        } catch (err: any) {
+          console.error("Cloud load error", err);
+          addLog('CLOUD_ERROR', `Failed to fetch clients from cloud: ${err.message || 'Unknown error'}`, 'FAILURE');
           if (storedClients) setClients(JSON.parse(storedClients));
         }
       } else {
@@ -328,6 +329,7 @@ const App: React.FC = () => {
         await addCloudClient(newClient);
         addLog('CLOUD_ADD', `Client synced to cloud DB.`, 'SUCCESS');
       } catch (e: any) {
+        console.error("Cloud save failed", e);
         addLog('CLOUD_ERROR', `Failed to save to cloud: ${e.message}`, 'FAILURE');
       }
     }
