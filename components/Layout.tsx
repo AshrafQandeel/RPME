@@ -58,7 +58,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="bg-slate-800 rounded p-3 text-xs text-slate-400">
             <div className="flex justify-between items-center mb-1">
                <p className="font-semibold text-slate-200">System Status</p>
-               <span className="text-[10px] bg-slate-700 px-1 rounded">v1.0.5</span>
+               <span className="text-[10px] bg-slate-700 px-1 rounded">v1.1.1</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-green-500"></span>

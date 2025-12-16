@@ -67,3 +67,11 @@ export interface DashboardStats {
   highRiskMatches: number;
   lastUpdate: string;
 }
+
+export interface AppSettings {
+  autoSync: boolean;
+  syncIntervalMinutes: number; // in minutes
+  sourceUrl: string;
+  lastSync: string;
+  nextSync: string;
+}

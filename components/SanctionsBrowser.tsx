@@ -1,19 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SanctionEntry } from '../types';
-import { RefreshCw, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { RefreshCw, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Upload } from 'lucide-react';
 
 interface SanctionsBrowserProps {
   sanctions: SanctionEntry[];
   lastUpdated: string;
   onRefresh: () => void;
   isUpdating: boolean;
+  onFileUpload: (file: File) => void;
 }
 
 const ITEMS_PER_PAGE = 15;
 
-const SanctionsBrowser: React.FC<SanctionsBrowserProps> = ({ sanctions, lastUpdated, onRefresh, isUpdating }) => {
+const SanctionsBrowser: React.FC<SanctionsBrowserProps> = ({ sanctions, lastUpdated, onRefresh, isUpdating, onFileUpload }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Reset to first page when search term changes or data updates
   useEffect(() => {
@@ -37,22 +39,44 @@ const SanctionsBrowser: React.FC<SanctionsBrowserProps> = ({ sanctions, lastUpda
     }
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      onFileUpload(e.target.files[0]);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
            <h2 className="text-2xl font-bold text-gray-800">Global Sanctions List</h2>
            <p className="text-sm text-gray-500">Sources: UN Consolidated List • Qatar NCTC Unified List</p>
-           <p className="text-xs text-gray-400 mt-1">Last Updated: {lastUpdated}</p>
+           <p className="text-xs text-gray-400 mt-1">Last Updated: {lastUpdated !== 'Never' ? new Date(lastUpdated).toLocaleString() : 'Never'}</p>
         </div>
-        <button 
-          onClick={onRefresh}
-          disabled={isUpdating}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-white transition-all shadow-sm ${isUpdating ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
-        >
-          <RefreshCw size={18} className={isUpdating ? 'animate-spin' : ''} />
-          {isUpdating ? 'Syncing All Sources...' : 'Sync All Sources'}
-        </button>
+        <div className="flex gap-2">
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            onChange={handleFileChange} 
+            accept=".xml" 
+            className="hidden" 
+          />
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+          >
+            <Upload size={18} />
+            Import XML
+          </button>
+          <button 
+            onClick={onRefresh}
+            disabled={isUpdating}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-white transition-all shadow-sm ${isUpdating ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'}`}
+          >
+            <RefreshCw size={18} className={isUpdating ? 'animate-spin' : ''} />
+            {isUpdating ? 'Syncing...' : 'Sync Now'}
+          </button>
+        </div>
       </div>
 
        {/* Filter Bar */}

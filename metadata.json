@@ -1,5 +1,5 @@
 {
   "name": "UNSanctionGuard",
-  "description": "A comprehensive compliance screening system that matches client records against the UN Security Council Consolidated Sanctions List. Updated v1.0.5",
+  "description": "A comprehensive compliance screening system that matches client records against the UN Security Council Consolidated Sanctions List. Updated v1.1.1",
   "requestFramePermissions": []
 }
