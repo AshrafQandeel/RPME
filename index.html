@@ -3,7 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>UNSanctionGuard - Compliance Screening</title>
+    <meta name="application-name" content="UNSanctionGuard" />
+    <meta name="version" content="1.0.2-patch" />
+    <title>UNSanctionGuard - Live System (v1.0.2)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -13,21 +15,26 @@
       }
     </style>
     <script>
+      // Enhanced Error Logging to UI
       window.addEventListener('error', function(event) {
         const root = document.getElementById('root');
-        if (root && root.innerHTML === '') {
+        // Only show if root is empty (app didn't mount)
+        if (root && (!root.innerHTML || root.innerHTML.trim() === '')) {
+          console.error("Critical Start Error:", event.error);
           root.innerHTML = `
-            <div style="padding: 2rem; color: #ef4444; font-family: sans-serif;">
-              <h1 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem;">Application Startup Error</h1>
-              <p style="margin-bottom: 0.5rem;">The application failed to start correctly.</p>
-              <pre style="background: #fee2e2; padding: 1rem; border-radius: 0.5rem; overflow: auto;">${event.message}</pre>
-              <p style="margin-top: 1rem; font-size: 0.875rem; color: #666;">Check the browser console (F12) for more details.</p>
+            <div style="padding: 2rem; color: #dc2626; font-family: system-ui, sans-serif; max-width: 600px; margin: 2rem auto; background: white; border-radius: 8px; box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);">
+              <h1 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem;">System Error</h1>
+              <p style="margin-bottom: 1rem;">The application could not start due to a configuration issue.</p>
+              <div style="background: #fef2f2; color: #991b1b; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; font-family: monospace; font-size: 0.875rem;">
+                ${event.message}
+              </div>
+              <p style="margin-top: 1rem; font-size: 0.75rem; color: #6b7280;">Timestamp: ${new Date().toISOString()}</p>
             </div>
           `;
         }
       });
     </script>
-  <script type="importmap">
+    <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@18.2.0",
@@ -41,7 +48,7 @@
   }
 }
 </script>
-</head>
+  </head>
   <body>
     <div id="root"></div>
     <script type="module" src="./index.tsx"></script>
