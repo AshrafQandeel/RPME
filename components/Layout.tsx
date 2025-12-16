@@ -1,5 +1,5 @@
-import React from 'react';
-import { LayoutDashboard, Users, ShieldAlert, FileText, Settings, Globe, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { LayoutDashboard, Users, ShieldAlert, FileText, Settings, Globe, AlertCircle, Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 interface LayoutProps {
@@ -8,7 +8,13 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children, cloudError }) => {
+  const [isSidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+
+  // Close sidebar automatically on route change (mobile UX)
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
 
   const navItems = [
     { label: 'Dashboard', path: '/', icon: <LayoutDashboard size={20} /> },
@@ -19,10 +25,25 @@ const Layout: React.FC<LayoutProps> = ({ children, cloudError }) => {
   ];
 
   return (
-    <div className="flex h-screen bg-gray-50 text-gray-900">
+    <div className="flex h-screen bg-gray-50 text-gray-900 overflow-hidden">
+      {/* Mobile Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-30 md:hidden transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-64 bg-slate-900 text-white flex flex-col fixed h-full z-10">
-        <div className="p-6 border-b border-slate-700">
+      <aside 
+        className={`
+          fixed inset-y-0 left-0 z-40 w-64 bg-slate-900 text-white flex flex-col 
+          transform transition-transform duration-300 ease-in-out 
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
+          md:translate-x-0 md:static md:inset-auto md:h-full flex-shrink-0
+        `}
+      >
+        <div className="p-6 border-b border-slate-700 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded bg-white flex items-center justify-center overflow-hidden shrink-0">
               <img 
@@ -36,6 +57,13 @@ const Layout: React.FC<LayoutProps> = ({ children, cloudError }) => {
               <p className="text-xs text-slate-400">UN Compliance System</p>
             </div>
           </div>
+          {/* Close Button (Mobile Only) */}
+          <button 
+            onClick={() => setSidebarOpen(false)}
+            className="md:hidden text-slate-400 hover:text-white p-1"
+          >
+            <X size={24} />
+          </button>
         </div>
         
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
@@ -74,30 +102,40 @@ const Layout: React.FC<LayoutProps> = ({ children, cloudError }) => {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 ml-64 overflow-y-auto flex flex-col h-full">
+      <main className="flex-1 overflow-y-auto flex flex-col h-full w-full relative min-w-0">
         <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm flex-shrink-0">
            {/* Alert Banner */}
            {cloudError && (
-              <div className="bg-red-600 text-white px-8 py-3 flex items-center justify-between animate-fade-in">
+              <div className="bg-red-600 text-white px-4 md:px-8 py-3 flex items-center justify-between animate-fade-in">
                   <div className="flex items-center gap-3">
                       <AlertCircle size={20} className="shrink-0" />
-                      <span className="text-sm font-medium">{cloudError}</span>
+                      <span className="text-sm font-medium line-clamp-1">{cloudError}</span>
                   </div>
                   <Link 
                     to="/admin" 
-                    className="bg-white text-red-600 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider hover:bg-red-50 transition-colors whitespace-nowrap"
+                    className="bg-white text-red-600 px-3 py-1.5 rounded text-xs font-bold uppercase tracking-wider hover:bg-red-50 transition-colors whitespace-nowrap ml-2"
                   >
-                    Fix in Admin
+                    Fix
                   </Link>
               </div>
            )}
            
-           <div className="px-8 py-4 flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-gray-800">
-                {navItems.find(n => n.path === location.pathname)?.label || 'Overview'}
-              </h2>
+           <div className="px-4 md:px-8 py-4 flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                {/* Hamburger Button (Mobile Only) */}
+                <button 
+                  onClick={() => setSidebarOpen(true)}
+                  className="md:hidden text-gray-500 hover:text-gray-900 p-1 -ml-2"
+                >
+                  <Menu size={24} />
+                </button>
+                <h2 className="text-xl font-semibold text-gray-800">
+                  {navItems.find(n => n.path === location.pathname)?.label || 'Overview'}
+                </h2>
+              </div>
+              
               <div className="flex items-center gap-4">
-                <div className="text-right">
+                <div className="text-right hidden sm:block">
                   <p className="text-sm font-medium text-gray-900">Compliance Officer</p>
                   <p className="text-xs text-gray-500">Logged in</p>
                 </div>
@@ -108,7 +146,7 @@ const Layout: React.FC<LayoutProps> = ({ children, cloudError }) => {
           </div>
         </header>
 
-        <div className="p-8 max-w-7xl mx-auto w-full flex-1">
+        <div className="p-4 md:p-8 max-w-7xl mx-auto w-full flex-1">
           {children}
         </div>
       </main>
