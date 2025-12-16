@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Users, ShieldAlert, FileText, Settings, Globe, AlertCircle, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Users, ShieldAlert, FileText, Settings, Globe, AlertCircle, Menu, X, Wifi, WifiOff } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 
 interface LayoutProps {
   children: React.ReactNode;
   cloudError?: string | null;
+  isCloudConnected: boolean;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, cloudError }) => {
+const Layout: React.FC<LayoutProps> = ({ children, cloudError, isCloudConnected }) => {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
@@ -94,8 +95,8 @@ const Layout: React.FC<LayoutProps> = ({ children, cloudError }) => {
               <span>Sanctions: Synced</span>
             </div>
             <div className="flex items-center gap-2 mt-1">
-              <span className={`w-2 h-2 rounded-full ${cloudError ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></span>
-              <span>Database: {cloudError ? 'Error' : 'Connected'}</span>
+              <span className={`w-2 h-2 rounded-full ${cloudError ? 'bg-red-500 animate-pulse' : isCloudConnected ? 'bg-green-500' : 'bg-amber-500'}`}></span>
+              <span>DB: {cloudError ? 'Error' : isCloudConnected ? 'Connected' : 'Local'}</span>
             </div>
           </div>
         </div>
@@ -129,9 +130,23 @@ const Layout: React.FC<LayoutProps> = ({ children, cloudError }) => {
                 >
                   <Menu size={24} />
                 </button>
-                <h2 className="text-xl font-semibold text-gray-800">
-                  {navItems.find(n => n.path === location.pathname)?.label || 'Overview'}
-                </h2>
+                <div className="flex flex-col md:flex-row md:items-center gap-1 md:gap-3">
+                    <h2 className="text-xl font-semibold text-gray-800">
+                    {navItems.find(n => n.path === location.pathname)?.label || 'Overview'}
+                    </h2>
+                    {/* Connection Badge */}
+                    <div className="md:ml-2">
+                        {isCloudConnected ? (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">
+                                <Wifi size={12} /> Cloud Active
+                            </span>
+                        ) : (
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200" title="Data stored locally only">
+                                <WifiOff size={12} /> Local Demo Mode
+                            </span>
+                        )}
+                    </div>
+                </div>
               </div>
               
               <div className="flex items-center gap-4">

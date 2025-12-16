@@ -9,7 +9,7 @@ import { Client, SanctionEntry, SystemLog, RiskLevel, EntityType, AppSettings } 
 import { generateMockSanctions, QATAR_MOCK_SANCTIONS } from './services/mockData';
 import { screenClient } from './services/screeningEngine';
 import { fetchFromUrl, parseUNSanctionsXML, OFFICIAL_UN_XML_URL } from './services/unSanctionsService';
-import { initSupabase, fetchCloudClients, addCloudClient, deleteCloudClient, updateCloudClient } from './services/cloudDb';
+import { initSupabase, fetchCloudClients, addCloudClient, deleteCloudClient, updateCloudClient, subscribeToClients, unsubscribeFromClients } from './services/cloudDb';
 
 const DEFAULT_SETTINGS: AppSettings = {
   autoSync: true,
@@ -60,7 +60,8 @@ const App: React.FC = () => {
         const cloudClients = await fetchCloudClients();
         if (cloudClients) {
           setClients(cloudClients);
-          addLog('CLOUD_SYNC', `Synced ${cloudClients.length} clients from Supabase.`, 'SUCCESS');
+          // Only log if it's a significant load, to avoid spamming logs on every realtime update
+          // addLog('CLOUD_SYNC', `Synced ${cloudClients.length} clients from Supabase.`, 'SUCCESS');
         }
       } catch (err: any) {
         console.error("Cloud fetch error during refresh", err);
@@ -99,8 +100,6 @@ const App: React.FC = () => {
     const initialLoad = async () => {
       setCloudError(null); 
       if (connected) {
-        // We will let the 'isCloudConnected' effect handle the actual fetch to avoid double fetching logic duplication
-        // or we can fetch here just to be fast.
         try {
            const cloudClients = await fetchCloudClients();
            if (cloudClients) {
@@ -153,6 +152,27 @@ const App: React.FC = () => {
       refreshClients();
     }
   }, [isCloudConnected, refreshClients]);
+
+  // --- REALTIME SUBSCRIPTION ---
+  useEffect(() => {
+    let subscription: any = null;
+
+    if (isCloudConnected) {
+      // Subscribe to changes in the 'clients' table
+      subscription = subscribeToClients(() => {
+        console.log("Realtime event received, refreshing data...");
+        addLog('CLOUD_SYNC', 'Realtime update received from cloud.', 'SUCCESS');
+        refreshClients();
+      });
+    }
+
+    return () => {
+      if (subscription) {
+        unsubscribeFromClients(subscription);
+      }
+    };
+  }, [isCloudConnected, refreshClients, addLog]);
+
 
   // --- PERSISTENCE ---
   useEffect(() => {
@@ -392,7 +412,7 @@ const App: React.FC = () => {
 
   return (
     <Router>
-      <Layout cloudError={cloudError}>
+      <Layout cloudError={cloudError} isCloudConnected={isCloudConnected}>
         <Routes>
           <Route path="/" element={<Dashboard clients={clients} sanctionsCount={sanctions.length} />} />
           <Route 

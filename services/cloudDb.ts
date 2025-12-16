@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, RealtimeChannel } from '@supabase/supabase-js';
 import { Client, AppSettings, RiskLevel, EntityType } from '../types';
 
 let supabase: any = null;
@@ -10,7 +10,7 @@ const toSupabaseFormat = (client: Client) => {
     first_name: client.firstName,
     middle_name: client.middleName,
     last_name: client.lastName,
-    dob: client.dob, // Was missing in previous schema
+    dob: client.dob,
     nationality: client.nationality,
     passport_number: client.passportNumber,
     type: client.type,
@@ -115,4 +115,30 @@ export const updateCloudClient = async (client: Client): Promise<void> => {
     console.error("Supabase Update Error:", error);
     throw error;
   }
+};
+
+// --- REALTIME SUBSCRIPTIONS ---
+
+export const subscribeToClients = (onUpdate: () => void): RealtimeChannel | null => {
+  if (!supabase) return null;
+
+  const channel = supabase
+    .channel('clients-all')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'clients' },
+      (payload: any) => {
+        // console.log('Realtime update received!', payload);
+        onUpdate();
+      }
+    )
+    .subscribe();
+
+  return channel;
+};
+
+export const unsubscribeFromClients = async (channel: RealtimeChannel | null) => {
+    if (supabase && channel) {
+        await supabase.removeChannel(channel);
+    }
 };
