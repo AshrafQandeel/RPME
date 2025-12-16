@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { Client, EntityType, RiskLevel } from '../types';
-import { Plus, Search, Filter, Trash2, Edit } from 'lucide-react';
+import { Plus, Search, Filter, Trash2, Edit, RefreshCw } from 'lucide-react';
 
 interface ClientManagerProps {
   clients: Client[];
   onAddClient: (client: Omit<Client, 'id' | 'createdAt' | 'riskLevel'>) => void;
   onDeleteClient: (id: string) => void;
+  onRefresh?: () => void;
 }
 
-const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onDeleteClient }) => {
+const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onDeleteClient, onRefresh }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -41,6 +43,14 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
     });
   };
 
+  const handleRefresh = async () => {
+    if (onRefresh) {
+      setIsRefreshing(true);
+      await onRefresh();
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
+
   const filteredClients = clients.filter(c => 
     `${c.firstName} ${c.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.nationality.toLowerCase().includes(searchTerm.toLowerCase())
@@ -59,13 +69,24 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h2 className="text-2xl font-bold text-gray-800">Client Management</h2>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors shadow-sm"
-        >
-          <Plus size={18} />
-          Add New Client
-        </button>
+        <div className="flex gap-2">
+          {onRefresh && (
+            <button 
+              onClick={handleRefresh}
+              className={`flex items-center gap-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 px-4 py-2 rounded-lg transition-colors shadow-sm ${isRefreshing ? 'opacity-70' : ''}`}
+            >
+              <RefreshCw size={18} className={isRefreshing ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+          )}
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors shadow-sm"
+          >
+            <Plus size={18} />
+            Add New Client
+          </button>
+        </div>
       </div>
 
       {/* Filter Bar */}

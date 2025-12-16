@@ -53,6 +53,33 @@ const App: React.FC = () => {
     });
   }, []);
 
+  // Dedicated function to fetch clients based on current connection status
+  const refreshClients = useCallback(async () => {
+    if (isCloudConnected) {
+      try {
+        const cloudClients = await fetchCloudClients();
+        if (cloudClients) {
+          setClients(cloudClients);
+          addLog('CLOUD_SYNC', `Synced ${cloudClients.length} clients from Supabase.`, 'SUCCESS');
+        }
+      } catch (err: any) {
+        console.error("Cloud fetch error during refresh", err);
+        // Detect Schema Mismatch specifically
+        if (err.message && (err.message.includes("does not exist") || err.message.includes("column"))) {
+           setCloudError("Database Schema Mismatch: The table structure in Supabase is outdated. Please run the SQL Script in Admin Panel.");
+        }
+        addLog('CLOUD_ERROR', `Failed to sync clients: ${err.message}`, 'FAILURE');
+      }
+    } else {
+      // Local fallback reload
+      const storedClients = localStorage.getItem('unsg_clients');
+      if (storedClients) {
+        setClients(JSON.parse(storedClients));
+        addLog('LOCAL_LOAD', 'Reloaded clients from local storage.', 'SUCCESS');
+      }
+    }
+  }, [isCloudConnected, addLog]);
+
   // --- INITIALIZATION ---
   useEffect(() => {
     // Load local storage first
@@ -68,28 +95,24 @@ const App: React.FC = () => {
     const connected = initSupabase(currentSettings);
     setIsCloudConnected(connected);
 
-    // Initial Data Load Logic
-    const loadData = async () => {
-      setCloudError(null); // Reset error on reload
+    // Initial Data Load Logic (runs once on mount)
+    const initialLoad = async () => {
+      setCloudError(null); 
       if (connected) {
+        // We will let the 'isCloudConnected' effect handle the actual fetch to avoid double fetching logic duplication
+        // or we can fetch here just to be fast.
         try {
-          const cloudClients = await fetchCloudClients();
-          if (cloudClients) {
-            setClients(cloudClients);
-            addLog('CLOUD_SYNC', `Loaded ${cloudClients.length} clients from Supabase.`, 'SUCCESS');
-          } else {
-             setClients([]);
-          }
-        } catch (err: any) {
-          console.error("Cloud load error", err);
-          
-          // Detect Schema Mismatch specifically
-          if (err.message && (err.message.includes("does not exist") || err.message.includes("column"))) {
-            setCloudError("Database Schema Mismatch: The table structure in Supabase is outdated. Please run the SQL Script in Admin Panel.");
-          }
-
-          addLog('CLOUD_ERROR', `Failed to fetch clients from cloud: ${err.message || 'Unknown error'}`, 'FAILURE');
-          if (storedClients) setClients(JSON.parse(storedClients));
+           const cloudClients = await fetchCloudClients();
+           if (cloudClients) {
+             setClients(cloudClients);
+             addLog('CLOUD_SYNC', `Loaded ${cloudClients.length} clients from Supabase.`, 'SUCCESS');
+           }
+        } catch(e: any) {
+           if (e.message && (e.message.includes("does not exist") || e.message.includes("column"))) {
+             setCloudError("Database Schema Mismatch: Run SQL Script in Admin.");
+           }
+           // Fallback to local on error
+           if (storedClients) setClients(JSON.parse(storedClients));
         }
       } else {
         // Local Mode
@@ -110,7 +133,7 @@ const App: React.FC = () => {
       }
     };
 
-    loadData();
+    initialLoad();
 
     if (storedSanctions) {
       setSanctions(JSON.parse(storedSanctions));
@@ -123,6 +146,13 @@ const App: React.FC = () => {
     
     addLog('SYSTEM_INIT', `Application started. Cloud Mode: ${connected ? 'Active' : 'Offline'}`, 'SUCCESS');
   }, [addLog]);
+
+  // Reactive Effect: Fetch clients whenever cloud connection is established (e.g. after entering settings)
+  useEffect(() => {
+    if (isCloudConnected) {
+      refreshClients();
+    }
+  }, [isCloudConnected, refreshClients]);
 
   // --- PERSISTENCE ---
   useEffect(() => {
@@ -142,7 +172,6 @@ const App: React.FC = () => {
     // Re-init Supabase if settings change
     const connected = initSupabase(settings);
     setIsCloudConnected(connected);
-    // If settings changed, we might fix the connection, so reset error
     if (connected) setCloudError(null);
   }, [settings]);
 
@@ -366,7 +395,17 @@ const App: React.FC = () => {
       <Layout cloudError={cloudError}>
         <Routes>
           <Route path="/" element={<Dashboard clients={clients} sanctionsCount={sanctions.length} />} />
-          <Route path="/clients" element={<ClientManager clients={clients} onAddClient={handleAddClient} onDeleteClient={handleDeleteClient} />} />
+          <Route 
+            path="/clients" 
+            element={
+              <ClientManager 
+                clients={clients} 
+                onAddClient={handleAddClient} 
+                onDeleteClient={handleDeleteClient} 
+                onRefresh={refreshClients}
+              />
+            } 
+          />
           <Route 
             path="/sanctions" 
             element={
