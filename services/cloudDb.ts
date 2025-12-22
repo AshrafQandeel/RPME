@@ -3,43 +3,60 @@ import { Client, AppSettings, RiskLevel, EntityType } from '../types';
 
 let supabase: any = null;
 
-// Helper to map Client (CamelCase) -> DB (SnakeCase)
 const toSupabaseFormat = (client: Client) => {
   return {
     id: client.id,
     first_name: client.firstName,
-    middle_name: client.middleName,
-    last_name: client.lastName,
-    dob: client.dob,
-    nationality: client.nationality,
-    passport_number: client.passportNumber,
+    cr_number: client.crNumber,
+    cr_expiry: client.crExpiry,
+    entity_card_number: client.entityCardNumber,
+    entity_card_expiry: client.entityCardExpiry,
+    nature_of_business: client.natureOfBusiness,
+    service_needed: client.serviceNeeded,
+    telephone_number: client.telephoneNumber,
+    email_address: client.emailAddress,
+    website: client.website,
+    registered_address: client.registeredAddress,
+    // Store arrays as JSONB
+    shareholders: client.shareholders,
+    ubos: client.ubos,
+    signatories: client.signatories,
+    documents: client.documents,
+    is_pep: client.isPep,
     type: client.type,
-    residence_country: client.residenceCountry,
-    remarks: client.remarks,
     created_at: client.createdAt,
     last_screened_at: client.lastScreenedAt,
     risk_level: client.riskLevel,
-    match_id: client.matchId
+    match_id: client.matchId,
+    matches: client.matches
   };
 };
 
-// Helper to map DB (SnakeCase) -> Client (CamelCase)
 const fromSupabaseFormat = (data: any): Client => {
   return {
     id: data.id,
     firstName: data.first_name,
-    middleName: data.middle_name,
-    lastName: data.last_name,
-    dob: data.dob,
-    nationality: data.nationality,
-    passportNumber: data.passport_number,
+    crNumber: data.cr_number,
+    crExpiry: data.cr_expiry,
+    entityCardNumber: data.entity_card_number,
+    entityCardExpiry: data.entity_card_expiry,
+    natureOfBusiness: data.nature_of_business,
+    serviceNeeded: data.service_needed,
+    telephoneNumber: data.telephone_number,
+    emailAddress: data.email_address,
+    website: data.website,
+    registeredAddress: data.registered_address,
+    shareholders: data.shareholders || [],
+    ubos: data.ubos || [],
+    signatories: data.signatories || [],
+    documents: data.documents || {},
+    isPep: data.is_pep,
     type: data.type as EntityType,
-    residenceCountry: data.residence_country,
-    remarks: data.remarks,
     createdAt: data.created_at,
     lastScreenedAt: data.last_screened_at,
     riskLevel: data.risk_level as RiskLevel,
-    matchId: data.match_id
+    matchId: data.match_id,
+    matches: data.matches || []
   };
 };
 
@@ -48,97 +65,41 @@ export const initSupabase = (settings: AppSettings) => {
     try {
       supabase = createClient(settings.supabaseUrl, settings.supabaseKey);
       return true;
-    } catch (e) {
-      console.error("Failed to init Supabase", e);
-      return false;
-    }
+    } catch (e) { return false; }
   }
   return false;
 };
 
 export const fetchCloudClients = async (): Promise<Client[] | null> => {
   if (!supabase) return null;
-  
-  const { data, error } = await supabase
-    .from('clients')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error("Supabase Fetch Error:", error);
-    throw error;
-  }
-
+  const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: false });
+  if (error) throw error;
   return data.map(fromSupabaseFormat);
 };
 
 export const addCloudClient = async (client: Client): Promise<void> => {
   if (!supabase) return;
-
-  const dbData = toSupabaseFormat(client);
-
-  const { error } = await supabase
-    .from('clients')
-    .insert([dbData]);
-
-  if (error) {
-    console.error("Supabase Insert Error:", error);
-    throw error;
-  }
+  const { error } = await supabase.from('clients').insert([toSupabaseFormat(client)]);
+  if (error) throw error;
 };
 
 export const deleteCloudClient = async (id: string): Promise<void> => {
   if (!supabase) return;
-
-  const { error } = await supabase
-    .from('clients')
-    .delete()
-    .eq('id', id);
-
-  if (error) {
-    console.error("Supabase Delete Error:", error);
-    throw error;
-  }
+  const { error } = await supabase.from('clients').delete().eq('id', id);
+  if (error) throw error;
 };
 
 export const updateCloudClient = async (client: Client): Promise<void> => {
   if (!supabase) return;
-
-  const dbData = toSupabaseFormat(client);
-
-  const { error } = await supabase
-    .from('clients')
-    .update(dbData)
-    .eq('id', client.id);
-
-  if (error) {
-    console.error("Supabase Update Error:", error);
-    throw error;
-  }
+  const { error } = await supabase.from('clients').update(toSupabaseFormat(client)).eq('id', client.id);
+  if (error) throw error;
 };
-
-// --- REALTIME SUBSCRIPTIONS ---
 
 export const subscribeToClients = (onUpdate: () => void): RealtimeChannel | null => {
   if (!supabase) return null;
-
-  const channel = supabase
-    .channel('clients-all')
-    .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'clients' },
-      (payload: any) => {
-        // console.log('Realtime update received!', payload);
-        onUpdate();
-      }
-    )
-    .subscribe();
-
-  return channel;
+  return supabase.channel('clients-all').on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, onUpdate).subscribe();
 };
 
 export const unsubscribeFromClients = async (channel: RealtimeChannel | null) => {
-    if (supabase && channel) {
-        await supabase.removeChannel(channel);
-    }
+    if (supabase && channel) await supabase.removeChannel(channel);
 };

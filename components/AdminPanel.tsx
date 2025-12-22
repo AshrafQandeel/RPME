@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SystemLog, AppSettings } from '../types';
-import { FileDown, ShieldCheck, RefreshCw, Save, Globe, Database, Upload, Download, AlertCircle, Cloud, Terminal, Check, Smartphone, Link as LinkIcon, Copy } from 'lucide-react';
+import { FileDown, ShieldCheck, RefreshCw, Save, Globe, Database, Upload, Download, AlertCircle, Cloud, Terminal, Check, Smartphone, Copy } from 'lucide-react';
 
 interface AdminPanelProps {
   logs: SystemLog[];
@@ -27,19 +27,12 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [showQr, setShowQr] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Sync local settings with prop settings only if user hasn't made unsaved changes
-  useEffect(() => {
-    if (!hasChanges) {
-      setLocalSettings(settings);
-    }
-  }, [settings, hasChanges]);
+  useEffect(() => { if (!hasChanges) setLocalSettings(settings); }, [settings, hasChanges]);
 
   const handleChange = (field: keyof AppSettings, value: any) => {
     setLocalSettings(prev => ({ ...prev, [field]: value }));
     setHasChanges(true);
-    setSaveMessage(null);
   };
 
   const handleSave = () => {
@@ -49,345 +42,89 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setTimeout(() => setSaveMessage(null), 3000);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      if (window.confirm("WARNING: This will overwrite your current data with the backup file. Are you sure?")) {
-        onImportData(e.target.files[0]);
-      }
-      e.target.value = '';
-    }
-  };
-
   const getMagicLink = () => {
     if (!settings.supabaseUrl || !settings.supabaseKey) return '';
-    const config = {
-        supabaseUrl: settings.supabaseUrl,
-        supabaseKey: settings.supabaseKey
-    };
+    const config = { supabaseUrl: settings.supabaseUrl, supabaseKey: settings.supabaseKey };
     const encoded = btoa(JSON.stringify(config));
-    // Build link to current root, adding param
     const baseUrl = window.location.href.split('?')[0].split('#')[0];
     return `${baseUrl}?config=${encoded}`;
   };
 
-  const copyMagicLink = () => {
-    const link = getMagicLink();
-    if (link) {
-      navigator.clipboard.writeText(link);
-      setCopiedLink(true);
-      setTimeout(() => setCopiedLink(false), 2000);
-    }
-  };
-
   const sqlScript = `
--- 1. DROP old table if exists (WARNING: DELETES DATA)
+-- v1.3.0 KYC Schema Update
 drop table if exists clients;
 
--- 2. Create table with standard snake_case columns
 create table clients (
   id text primary key,
-  first_name text not null,
-  middle_name text,
-  last_name text not null,
-  dob text,
-  nationality text,
-  passport_number text,
+  first_name text not null, -- Name as in CR
+  cr_number text,
+  cr_expiry text,
+  entity_card_number text,
+  entity_card_expiry text,
+  nature_of_business text,
+  service_needed text,
+  telephone_number text,
+  email_address text,
+  website text,
+  registered_address text,
+  shareholders jsonb,
+  ubos jsonb,
+  signatories jsonb,
+  documents jsonb,
+  is_pep boolean default false,
   type text,
-  residence_country text,
-  remarks text,
   created_at text,
   last_screened_at text,
   risk_level text,
-  match_id text
+  match_id text,
+  matches jsonb
 );
 
--- 3. Enable Row Level Security
 alter table clients enable row level security;
-
--- 4. Create Policy for Insert/Select/Update/Delete
--- Note: 'with check (true)' is required for INSERTs to work with anon key
-create policy "Public Access" on clients for all 
-  using (true) 
-  with check (true);
+create policy "Public Access" on clients for all using (true) with check (true);
   `.trim();
 
   return (
     <div className="space-y-6 pb-20">
-      <div className="flex justify-between items-center sticky top-0 bg-gray-50/95 backdrop-blur z-10 py-4 border-b border-gray-200 -mx-4 px-4 md:mx-0 md:px-0">
+      <div className="flex justify-between items-center sticky top-0 bg-gray-50/95 backdrop-blur z-10 py-4 border-b border-gray-200">
         <h2 className="text-2xl font-bold text-gray-800">System Administration</h2>
-        <div className="flex items-center gap-3">
-          {saveMessage && (
-            <span className="text-sm text-green-600 flex items-center gap-1 font-medium animate-fade-in">
-              <Check size={16} /> {saveMessage}
-            </span>
-          )}
-          <button 
-            onClick={handleSave}
-            disabled={!hasChanges}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors shadow-sm font-medium ${
-              hasChanges 
-                ? 'bg-indigo-600 hover:bg-indigo-700 text-white' 
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-            }`}
-          >
-            <Save size={18} />
-            {hasChanges ? 'Save Changes' : 'Saved'}
-          </button>
-        </div>
+        <button onClick={handleSave} disabled={!hasChanges} className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium ${hasChanges ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg' : 'bg-gray-200 text-gray-400'}`}>
+          <Save size={18} /> {hasChanges ? 'Save Changes' : 'Saved'}
+        </button>
       </div>
 
-      {/* Cloud DB Configuration */}
-      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-blue-500">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <h3 className="font-semibold text-gray-800 flex items-center gap-2">
-              <Cloud size={20} className="text-blue-500"/> Cloud Database Connection (Supabase)
-            </h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Connect a Supabase project to sync clients across multiple browsers/devices.
-            </p>
-          </div>
-        </div>
-
+      <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-l-blue-500">
+        <h3 className="font-semibold text-gray-800 flex items-center gap-2 mb-4">
+          <Cloud size={20} className="text-blue-500"/> Supabase Cloud Integration
+        </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Project URL</label>
-            <input 
-              type="text" 
-              placeholder="https://xyz.supabase.co"
-              className="w-full text-sm border border-gray-300 rounded-lg p-2 text-gray-600 font-mono focus:ring-2 focus:ring-blue-500 outline-none"
-              value={localSettings.supabaseUrl || ''}
-              onChange={(e) => handleChange('supabaseUrl', e.target.value)}
-            />
-          </div>
-           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">API Key (Anon/Public)</label>
-            <input 
-              type="password" 
-              placeholder="eyJhbGciOiJIUzI1NiIsInR5..."
-              className="w-full text-sm border border-gray-300 rounded-lg p-2 text-gray-600 font-mono focus:ring-2 focus:ring-blue-500 outline-none"
-              value={localSettings.supabaseKey || ''}
-              onChange={(e) => handleChange('supabaseKey', e.target.value)}
-            />
-          </div>
+          <input className="border p-2 rounded text-sm font-mono" placeholder="Project URL" value={localSettings.supabaseUrl || ''} onChange={e => handleChange('supabaseUrl', e.target.value)} />
+          <input className="border p-2 rounded text-sm font-mono" type="password" placeholder="Anon Key" value={localSettings.supabaseKey || ''} onChange={e => handleChange('supabaseKey', e.target.value)} />
         </div>
-
-        <div className="flex justify-between items-center mb-4 border-t border-gray-100 pt-4">
-           {settings.supabaseUrl && settings.supabaseKey ? (
-             <div className="flex-1">
-               <button 
-                  onClick={() => setShowQr(!showQr)}
-                  className="flex items-center gap-2 text-sm text-indigo-600 font-medium hover:text-indigo-800 transition-colors"
-               >
-                 <Smartphone size={18} /> Connect Mobile / New Device
-               </button>
-               
-               {showQr && (
-                 <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200 flex flex-col sm:flex-row gap-6 items-center">
-                    <div className="bg-white p-2 rounded shadow-sm">
-                       <img 
-                          src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(getMagicLink())}`} 
-                          alt="Scan to Connect"
-                          className="w-32 h-32" 
-                        />
-                    </div>
-                    <div className="flex-1">
-                       <h4 className="font-semibold text-gray-900 mb-1">Scan to Sync</h4>
-                       <p className="text-sm text-gray-600 mb-3">
-                         Scan this code with your phone camera, or copy the link below to open on another computer.
-                         This will automatically configure the database connection.
-                       </p>
-                       <button 
-                         onClick={copyMagicLink}
-                         className="flex items-center gap-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-3 py-2 rounded text-sm font-medium transition-colors w-full sm:w-auto justify-center"
-                       >
-                         {copiedLink ? <Check size={16} className="text-green-600" /> : <Copy size={16} />}
-                         {copiedLink ? "Link Copied!" : "Copy Magic Link"}
-                       </button>
-                    </div>
-                 </div>
-               )}
-             </div>
-           ) : (
-             <div className="text-sm text-gray-400 italic">Save connection settings to enable device syncing.</div>
-           )}
-
-           {hasChanges && (localSettings.supabaseUrl !== settings.supabaseUrl || localSettings.supabaseKey !== settings.supabaseKey) && (
-             <button 
-                onClick={handleSave}
-                className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded transition-colors ml-4"
-             >
-               Save Connection Settings
-             </button>
-           )}
-        </div>
-
-        <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-           <button 
-             onClick={() => setShowSql(!showSql)}
-             className="flex items-center gap-2 text-sm font-medium text-slate-700 hover:text-blue-600 transition-colors w-full justify-between"
-           >
-             <span className="flex items-center gap-2"><Terminal size={16}/> Database Setup Script (Updated v1.2)</span>
-             <span className="text-xs text-slate-400">{showSql ? 'Hide' : 'Show'}</span>
+        
+        <div className="bg-slate-50 p-4 rounded-lg">
+           <button onClick={() => setShowSql(!showSql)} className="text-sm font-medium flex items-center gap-2 text-slate-700">
+             <Terminal size={16}/> Show Table SQL (KYC Schema v1.3)
            </button>
-           
-           {showSql && (
-             <div className="mt-3">
-               <p className="text-xs text-red-500 mb-2 font-bold">IMPORTANT: Run this script in Supabase to correct the table structure:</p>
-               <pre className="bg-slate-900 text-slate-50 p-3 rounded text-xs overflow-x-auto font-mono">
-                 {sqlScript}
-               </pre>
-             </div>
-           )}
+           {showSql && <pre className="mt-3 bg-slate-900 text-slate-50 p-3 rounded text-xs overflow-x-auto font-mono">{sqlScript}</pre>}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Sync Configuration Card */}
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-          <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Globe size={20} className="text-indigo-500"/> Sanctions Synchronization
-          </h3>
-          
-          <div className="space-y-4">
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <div>
-                <span className="block text-sm font-medium text-gray-900">Auto-Sync Enabled</span>
-                <span className="text-xs text-gray-500">Automatically update from source URLs</span>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  className="sr-only peer"
-                  checked={localSettings.autoSync}
-                  onChange={(e) => handleChange('autoSync', e.target.checked)}
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
-              </label>
-            </div>
-
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+        <h3 className="font-semibold text-gray-800 flex items-center gap-2 mb-4">
+          <Globe size={20} className="text-indigo-500"/> Onboarding Compliance Settings
+        </h3>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Source URL (UN XML)</label>
-              <input 
-                type="text" 
-                className="w-full text-sm border border-gray-300 rounded-lg p-2 text-gray-600 font-mono"
-                value={localSettings.sourceUrl}
-                onChange={(e) => handleChange('sourceUrl', e.target.value)}
-              />
+              <span className="block text-sm font-medium">Strict Document Verification</span>
+              <span className="text-xs text-gray-500">Block onboarding if mandatory docs are not uploaded</span>
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Sync Frequency</label>
-                <select 
-                  className="w-full border border-gray-300 rounded-lg p-2 text-sm"
-                  value={localSettings.syncIntervalMinutes}
-                  onChange={(e) => handleChange('syncIntervalMinutes', parseInt(e.target.value))}
-                >
-                  <option value={15}>Every 15 Minutes</option>
-                  <option value={60}>Hourly</option>
-                  <option value={720}>Every 12 Hours</option>
-                  <option value={1440}>Daily</option>
-                </select>
-              </div>
-              <div className="flex items-end">
-                 <button 
-                  onClick={onTriggerSync}
-                  disabled={isSyncing}
-                  className={`w-full flex justify-center items-center gap-2 border border-indigo-200 text-indigo-700 px-4 py-2 rounded-lg hover:bg-indigo-50 transition-colors ${isSyncing ? 'opacity-50 cursor-wait' : ''}`}
-                 >
-                   <RefreshCw size={16} className={isSyncing ? 'animate-spin' : ''} />
-                   {isSyncing ? 'Syncing...' : 'Sync Now'}
-                 </button>
-              </div>
-            </div>
-
-            <div className="text-xs text-gray-500 pt-2 border-t border-gray-100 flex justify-between">
-              <span>Last: {new Date(settings.lastSync).toLocaleString()}</span>
-              <span>Next: {new Date(settings.nextSync).toLocaleString()}</span>
-            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" className="sr-only peer" defaultChecked />
+              <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-indigo-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+            </label>
           </div>
-        </div>
-
-        {/* System Health & Data Portability */}
-        <div className="space-y-6">
-           {/* Data Portability */}
-           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <h3 className="font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <Database size={20} className="text-purple-500"/> Data Portability
-            </h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Export your database to transfer it to another browser, or backup your client list.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <button 
-                onClick={onExportData}
-                className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-purple-200 transition-all group"
-              >
-                <Download size={24} className="text-gray-400 group-hover:text-purple-600 mb-2"/>
-                <span className="text-sm font-medium text-gray-700">Download Backup</span>
-              </button>
-              
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="flex flex-col items-center justify-center p-3 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-purple-200 transition-all group"
-              >
-                <Upload size={24} className="text-gray-400 group-hover:text-purple-600 mb-2"/>
-                <span className="text-sm font-medium text-gray-700">Restore from Backup</span>
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  onChange={handleFileChange} 
-                  accept=".json" 
-                  className="hidden" 
-                />
-              </button>
-            </div>
-           </div>
-
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <h3 className="font-semibold text-gray-800 mb-2 flex items-center gap-2"><ShieldCheck size={20} className="text-green-500"/> Data Retention</h3>
-            <p className="text-sm text-gray-600 mb-1">Audit logs are retained for 7 years as per AML policy.</p>
-            <div className="text-xs text-gray-400">Current storage: 45MB / 5GB</div>
-          </div>
-        </div>
-      </div>
-      
-       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-          <h3 className="font-bold text-gray-800">System Audit Logs</h3>
-          <button className="text-sm text-gray-500 flex items-center gap-1 hover:text-indigo-600">
-            <FileDown size={14} /> Export Logs
-          </button>
-        </div>
-        <div className="max-h-96 overflow-y-auto">
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 sticky top-0">
-              <tr>
-                <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Timestamp</th>
-                <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Action</th>
-                <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-xs font-medium text-gray-500 uppercase">Details</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {logs.slice().reverse().map((log) => (
-                <tr key={log.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-3 text-sm text-gray-500 font-mono">{log.timestamp.replace('T', ' ').substring(0, 19)}</td>
-                  <td className="px-6 py-3 text-sm font-medium text-gray-800">{log.action}</td>
-                  <td className="px-6 py-3">
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      log.status === 'SUCCESS' ? 'bg-green-100 text-green-800' : 
-                      log.status === 'FAILURE' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {log.status}
-                    </span>
-                  </td>
-                  <td className="px-6 py-3 text-sm text-gray-600">{log.details}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       </div>
     </div>

@@ -1,3 +1,4 @@
+
 export enum RiskLevel {
   NONE = 'None',
   LOW = 'Low',
@@ -27,29 +28,73 @@ export interface SanctionEntry {
   type: EntityType;
 }
 
+export interface KYCIndividual {
+  name: string;
+  nationality: string;
+  dob: string;
+  qidNumber: string;
+  qidExpiry: string;
+  ownershipPercentage?: number;
+  authority?: string;
+}
+
 export interface Client {
   id: string;
-  firstName: string;
+  // Core Company Info
+  firstName: string; // Used as "Name as in CR"
+  // Added optional fields to support individual screening mocks
   middleName?: string;
-  lastName: string;
+  lastName?: string;
+  nationality?: string;
   dob?: string;
-  nationality: string;
-  passportNumber?: string;
+  crNumber: string;
+  crExpiry: string;
+  entityCardNumber: string;
+  entityCardExpiry: string;
+  natureOfBusiness: string;
+  serviceNeeded: string;
+  telephoneNumber: string;
+  emailAddress: string;
+  website?: string;
+  registeredAddress: string;
+  
+  // Personnel
+  shareholders: KYCIndividual[];
+  ubos: KYCIndividual[];
+  signatories: KYCIndividual[];
+  
+  // Compliance
+  isPep: boolean;
   type: EntityType;
-  residenceCountry: string;
-  remarks?: string;
+  
+  // System Metadata
   createdAt: string;
   lastScreenedAt?: string;
   riskLevel: RiskLevel;
-  matchId?: string; // ID of the sanction entry matched
+  matchId?: string; // High level match reference
+  matches?: string[]; // Multiple matches for different people
+  
+  // Document Checklist
+  documents: {
+    cr: boolean;
+    entityCard: boolean;
+    tradeLicense: boolean;
+    aoa: boolean;
+    financials: boolean;
+    uboInfo: boolean;
+    shareholderIds: boolean;
+    signatoryIds: boolean;
+    parentCr: boolean;
+  };
 }
 
 export interface MatchResult {
   clientId: string;
   sanctionId: string;
-  score: number; // 0-100
+  score: number;
   riskLevel: RiskLevel;
   matchedFields: string[];
+  matchedPersonName?: string;
   timestamp: string;
 }
 
@@ -61,20 +106,12 @@ export interface SystemLog {
   status: 'SUCCESS' | 'FAILURE' | 'WARNING';
 }
 
-export interface DashboardStats {
-  totalClients: number;
-  totalSanctions: number;
-  highRiskMatches: number;
-  lastUpdate: string;
-}
-
 export interface AppSettings {
   autoSync: boolean;
-  syncIntervalMinutes: number; // in minutes
+  syncIntervalMinutes: number;
   sourceUrl: string;
   lastSync: string;
   nextSync: string;
-  // Cloud DB Config
   supabaseUrl?: string;
   supabaseKey?: string;
 }

@@ -1,3 +1,4 @@
+
 import { Client, SanctionEntry, MatchResult, RiskLevel } from '../types';
 
 // Simple Levenshtein distance implementation
@@ -34,7 +35,8 @@ export const screenClient = (client: Client, sanctions: SanctionEntry[]): MatchR
 
   for (const sanction of sanctions) {
     // 1. Name Match
-    const clientFullName = `${client.firstName} ${client.middleName || ''} ${client.lastName}`.replace(/\s+/g, ' ').trim();
+    // Added safety check and default values for optional middleName and lastName fields
+    const clientFullName = `${client.firstName} ${client.middleName || ''} ${client.lastName || ''}`.replace(/\s+/g, ' ').trim();
     
     // Construct sanction full name parts
     const sanctionNameParts = [sanction.firstName, sanction.secondName, sanction.thirdName, sanction.lastName].filter(Boolean).join(' ');
@@ -50,6 +52,7 @@ export const screenClient = (client: Client, sanctions: SanctionEntry[]): MatchR
 
     // 2. Nationality Correlation
     let nationalityMatch = false;
+    // Safely check for optional nationality property
     if (client.nationality && sanction.nationality) {
         if (sanction.nationality.toLowerCase().includes(client.nationality.toLowerCase())) {
             nationalityMatch = true;
@@ -58,6 +61,7 @@ export const screenClient = (client: Client, sanctions: SanctionEntry[]): MatchR
 
     // 3. DOB Match (Exact)
     let dobMatch = false;
+    // Safely check for optional dob property
     if (client.dob && sanction.dateOfBirth) {
         // Simple string comparison for simplified demo. In real app, parse dates.
         if (client.dob === sanction.dateOfBirth) {
