@@ -1,4 +1,3 @@
-
 export enum RiskLevel {
   NONE = 'None',
   LOW = 'Low',
@@ -28,53 +27,76 @@ export interface SanctionEntry {
   type: EntityType;
 }
 
-export interface KYCIndividual {
+export interface KYCBasePerson {
   name: string;
   nationality: string;
   dob: string;
-  qidNumber: string;
-  qidExpiry: string;
-  ownershipPercentage?: number;
-  authority?: string;
+  qidOrPassport: string;
+}
+
+export interface KYCDirector extends KYCBasePerson {}
+
+export interface KYCShareholder extends KYCBasePerson {
+  ownershipPercentage: number;
+  incDateOrDob: string; // Shareholders can be entities or individuals
+}
+
+export interface KYCUBO extends KYCBasePerson {}
+
+export interface KYCAuthorizedSignatory extends KYCBasePerson {
+  authority: string;
 }
 
 export interface Client {
   id: string;
-  // Core Company Info
-  firstName: string; // Used as "Name as in CR"
-  // Added optional fields to support individual screening mocks
-  middleName?: string;
-  lastName?: string;
-  nationality?: string;
-  dob?: string;
-  crNumber: string;
-  crExpiry: string;
-  entityCardNumber: string;
+  // 1. Company & Engagement Information
+  no: string;
+  status: 'Active' | 'Pending' | 'Closed' | 'Blacklisted';
+  qfcNo: string;
+  legalStructure: string;
+  corporateNationality: string;
+  firstName: string; // Mapping to "Client Name"
+  companyType: string;
+  servicesNeeded: string;
+  engagementYear: number;
+  engagementDate: string;
+  onboardingDate: string;
+  incorporationDate: string;
+  
+  // 2. Registration & Licensing Details
+  crExpiryDate: string;
+  entityCardNo: string;
   entityCardExpiry: string;
+  license: string;
+  licenseExpiry: string;
+  approvedAuditor: string;
+
+  // 3. Business & Contact Details
   natureOfBusiness: string;
-  serviceNeeded: string;
+  registeredAddress: string;
   telephoneNumber: string;
   emailAddress: string;
   website?: string;
-  registeredAddress: string;
+
+  // 4. Personnel Sections
+  directors: KYCDirector[];
+  shareholders: KYCShareholder[];
+  ubos: KYCUBO[];
+  signatories: KYCAuthorizedSignatory[];
+
+  // 5. Governance & Key Roles
+  secretary: string;
+  seniorExecutiveFunction: string;
   
-  // Personnel
-  shareholders: KYCIndividual[];
-  ubos: KYCIndividual[];
-  signatories: KYCIndividual[];
-  
-  // Compliance
+  // Compliance/System
   isPep: boolean;
   type: EntityType;
-  
-  // System Metadata
   createdAt: string;
   lastScreenedAt?: string;
   riskLevel: RiskLevel;
-  matchId?: string; // High level match reference
-  matches?: string[]; // Multiple matches for different people
+  matchId?: string;
+  matches?: string[];
   
-  // Document Checklist
   documents: {
     cr: boolean;
     entityCard: boolean;

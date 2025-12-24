@@ -35,8 +35,10 @@ export const screenClient = (client: Client, sanctions: SanctionEntry[]): MatchR
 
   for (const sanction of sanctions) {
     // 1. Name Match
-    // Added safety check and default values for optional middleName and lastName fields
-    const clientFullName = `${client.firstName} ${client.middleName || ''} ${client.lastName || ''}`.replace(/\s+/g, ' ').trim();
+    // Use type assertion to access properties that might exist on mock objects but aren't in the Client interface.
+    // This allows the engine to handle both full Client objects and partial mock objects used for individual screening.
+    const c = client as any;
+    const clientFullName = `${client.firstName} ${c.middleName || ''} ${c.lastName || ''}`.replace(/\s+/g, ' ').trim();
     
     // Construct sanction full name parts
     const sanctionNameParts = [sanction.firstName, sanction.secondName, sanction.thirdName, sanction.lastName].filter(Boolean).join(' ');
@@ -52,19 +54,21 @@ export const screenClient = (client: Client, sanctions: SanctionEntry[]): MatchR
 
     // 2. Nationality Correlation
     let nationalityMatch = false;
-    // Safely check for optional nationality property
-    if (client.nationality && sanction.nationality) {
-        if (sanction.nationality.toLowerCase().includes(client.nationality.toLowerCase())) {
+    // Safely check for optional nationality property or fall back to corporateNationality for Entities
+    const clientNationality = c.nationality || client.corporateNationality;
+    if (clientNationality && sanction.nationality) {
+        if (sanction.nationality.toLowerCase().includes(clientNationality.toLowerCase())) {
             nationalityMatch = true;
         }
     }
 
     // 3. DOB Match (Exact)
     let dobMatch = false;
-    // Safely check for optional dob property
-    if (client.dob && sanction.dateOfBirth) {
+    // Safely check for optional dob property or fall back to incorporationDate for Entities
+    const clientDob = c.dob || client.incorporationDate;
+    if (clientDob && sanction.dateOfBirth) {
         // Simple string comparison for simplified demo. In real app, parse dates.
-        if (client.dob === sanction.dateOfBirth) {
+        if (clientDob === sanction.dateOfBirth) {
             dobMatch = true;
         }
     }
