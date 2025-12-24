@@ -42,13 +42,15 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const sqlScript = `
--- UNSanctionGuard Corporate KYC Spreadsheet-Ready Schema v1.8
--- Run this in your Supabase SQL Editor to support direct CSV import
+-- UNSanctionGuard Corporate KYC Spreadsheet-Ready Schema v1.9
+-- This version handles automatic ID generation for CSV imports
 
 DROP TABLE IF EXISTS clients;
 
 CREATE TABLE clients (
-  id TEXT PRIMARY KEY,
+  -- The DEFAULT here fixes the "null value in column id" error during CSV import
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  
   "No" TEXT,
   "Status" TEXT,
   "QFC No" TEXT,
@@ -82,7 +84,7 @@ CREATE TABLE clients (
   "DOB" TEXT,
 
   "Significant Shareholders" TEXT,
-  "% on Ownership" TEXT, -- Changed to TEXT to support "100%" imports
+  "% on Ownership" TEXT,
   "QID / Passport / CR No." TEXT,
   "Nationality_1" TEXT,
   "DOB/ Date of incorporation" TEXT,
@@ -101,9 +103,9 @@ CREATE TABLE clients (
   -- Technical Internal Fields
   is_pep BOOLEAN DEFAULT FALSE,
   type TEXT DEFAULT 'Entity',
-  created_at TEXT,
+  created_at TEXT DEFAULT now()::text, -- Auto-populate timestamp on import
   last_screened_at TEXT,
-  risk_level TEXT,
+  risk_level TEXT DEFAULT 'None',
   match_id TEXT,
   matches JSONB DEFAULT '[]',
   documents JSONB DEFAULT '{}'
@@ -112,7 +114,7 @@ CREATE TABLE clients (
 -- Enable Realtime
 ALTER PUBLICATION supabase_realtime ADD TABLE clients;
 
--- RLS
+-- RLS (Row Level Security)
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public Access" ON clients FOR ALL USING (true) WITH CHECK (true);
   `.trim();
@@ -157,14 +159,19 @@ CREATE POLICY "Public Access" ON clients FOR ALL USING (true) WITH CHECK (true);
         
         <div className="bg-slate-900 rounded-2xl overflow-hidden">
            <div className="bg-slate-800 px-6 py-3 flex justify-between items-center">
-              <span className="text-slate-300 text-sm font-bold flex items-center gap-2"><Terminal size={16} /> SQL Setup Script (v1.8 - CSV Ready)</span>
+              <span className="text-slate-300 text-sm font-bold flex items-center gap-2"><Terminal size={16} /> SQL Setup Script (v1.9 - Import Ready)</span>
               <button onClick={copySql} className="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all">
                 {copiedSql ? <Check size={14} className="text-green-400"/> : <Copy size={14}/>}
                 {copiedSql ? 'Copied!' : 'Copy SQL'}
               </button>
            </div>
            <div className="p-6">
-              <p className="text-xs text-slate-400 mb-4 italic">Note: Ownership % is now a TEXT field to support imports with symbols like "%".</p>
+              <div className="bg-amber-900/20 border border-amber-900/30 p-3 rounded-xl mb-4">
+                 <p className="text-xs text-amber-200 flex items-center gap-2">
+                   <AlertTriangle size={14}/> 
+                   Important: This update enables automatic IDs. When importing CSV, simply don't map the "id" field; Supabase will generate them for you.
+                 </p>
+              </div>
               <pre className="text-blue-300 text-[10px] font-mono leading-relaxed max-h-64 overflow-y-auto custom-scrollbar">
                 {sqlScript}
               </pre>
@@ -174,5 +181,8 @@ CREATE POLICY "Public Access" ON clients FOR ALL USING (true) WITH CHECK (true);
     </div>
   );
 };
+
+// Add AlertTriangle to imports
+import { AlertTriangle } from 'lucide-react';
 
 export default AdminPanel;
