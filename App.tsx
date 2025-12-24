@@ -1,6 +1,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+// Added missing ShieldCheck import from lucide-react
+import { ShieldCheck } from 'lucide-react';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import ClientManager from './components/ClientManager';
@@ -31,6 +33,7 @@ const App: React.FC = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'LOCAL' | 'CONNECTING' | 'CONNECTED' | 'ERROR'>('LOCAL');
   const [cloudError, setCloudError] = useState<string | null>(null);
+  const [setupMessage, setSetupMessage] = useState<string | null>(null);
   const subscriptionRef = useRef<any>(null);
 
   const addLog = useCallback((action: string, details: string, status: 'SUCCESS' | 'FAILURE' | 'WARNING') => {
@@ -42,6 +45,36 @@ const App: React.FC = () => {
       status
     };
     setLogs(prev => [...prev, newLog]);
+  }, []);
+
+  // Handle URL-based Configuration Import
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.hash.split('?')[1]);
+    const setupConfig = params.get('setup');
+    
+    if (setupConfig) {
+      try {
+        const decoded = JSON.parse(atob(setupConfig));
+        if (decoded.url && decoded.key) {
+          const newSettings = {
+            ...settings,
+            supabaseUrl: decoded.url,
+            supabaseKey: decoded.key
+          };
+          setSettings(newSettings);
+          localStorage.setItem('unsg_settings', JSON.stringify(newSettings));
+          setSetupMessage("Cloud configuration imported successfully from link!");
+          addLog('SYSTEM', 'Database configuration imported via setup link.', 'SUCCESS');
+          
+          // Clean the URL
+          window.history.replaceState(null, '', window.location.hash.split('?')[0]);
+          setTimeout(() => setSetupMessage(null), 5000);
+        }
+      } catch (e) {
+        console.error("Failed to decode setup config", e);
+        addLog('SYSTEM', 'Failed to import configuration: Invalid link format.', 'FAILURE');
+      }
+    }
   }, []);
 
   const refreshClients = useCallback(async (isConnected: boolean) => {
@@ -142,6 +175,12 @@ const App: React.FC = () => {
         isCloudConnected={connectionStatus === 'CONNECTED'} 
         isConnecting={connectionStatus === 'CONNECTING'}
       >
+        {setupMessage && (
+          <div className="fixed top-20 right-8 z-50 bg-indigo-600 text-white px-6 py-4 rounded-2xl shadow-2xl animate-in slide-in-from-right-8 duration-500 flex items-center gap-3">
+            <ShieldCheck size={24} />
+            <span className="font-bold">{setupMessage}</span>
+          </div>
+        )}
         <Routes>
           <Route path="/" element={<Dashboard clients={clients} sanctionsCount={sanctions.length} />} />
           <Route path="/clients" element={<ClientManager 

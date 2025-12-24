@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { SystemLog, AppSettings } from '../types';
-import { Save, Cloud, Terminal, Check, Copy, AlertTriangle, Wifi, WifiOff, Loader2 } from 'lucide-react';
+import { Save, Cloud, Terminal, Check, Copy, AlertTriangle, Wifi, WifiOff, Loader2, Link as LinkIcon, Share2 } from 'lucide-react';
 import { checkConnection } from '../services/cloudDb';
 
 interface AdminPanelProps {
@@ -22,6 +22,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [hasChanges, setHasChanges] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'IDLE' | 'CHECKING' | 'CONNECTED' | 'FAILED'>('IDLE');
 
   useEffect(() => { 
@@ -46,7 +47,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setConnectionStatus(isOk ? 'CONNECTED' : 'FAILED');
   };
 
-  const sqlScript = `-- SQL setup script remains version 1.9...`.trim(); // Truncated for readability
+  const generateSetupLink = () => {
+    const config = {
+      url: localSettings.supabaseUrl,
+      key: localSettings.supabaseKey
+    };
+    const base64 = btoa(JSON.stringify(config));
+    const baseUrl = window.location.origin + window.location.pathname;
+    const fullUrl = `${baseUrl}#/admin?setup=${base64}`;
+    
+    navigator.clipboard.writeText(fullUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 3000);
+  };
+
+  const sqlScript = `-- SQL setup script remains version 1.9...`.trim();
 
   const copySql = () => {
     navigator.clipboard.writeText(sqlScript);
@@ -76,21 +91,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
           </div>
           
-          <button 
-            onClick={testConnection}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-              connectionStatus === 'CONNECTED' ? 'bg-green-100 text-green-700 border border-green-200' :
-              connectionStatus === 'FAILED' ? 'bg-red-100 text-red-700 border border-red-200' :
-              'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            {connectionStatus === 'CHECKING' ? <Loader2 size={14} className="animate-spin" /> : 
-             connectionStatus === 'CONNECTED' ? <Wifi size={14} /> : 
-             connectionStatus === 'FAILED' ? <WifiOff size={14} /> : <Wifi size={14} />}
-            {connectionStatus === 'CHECKING' ? 'Verifying...' : 
-             connectionStatus === 'CONNECTED' ? 'Successfully Linked' : 
-             connectionStatus === 'FAILED' ? 'Link Failed - Check Settings' : 'Test Connection'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={generateSetupLink}
+              disabled={!localSettings.supabaseUrl || !localSettings.supabaseKey}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                copiedLink ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              {copiedLink ? <Check size={14} /> : <Share2 size={14} />}
+              {copiedLink ? 'Link Copied!' : 'Share Setup Link'}
+            </button>
+            <button 
+              onClick={testConnection}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                connectionStatus === 'CONNECTED' ? 'bg-green-100 text-green-700 border border-green-200' :
+                connectionStatus === 'FAILED' ? 'bg-red-100 text-red-700 border border-red-200' :
+                'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {connectionStatus === 'CHECKING' ? <Loader2 size={14} className="animate-spin" /> : 
+               connectionStatus === 'CONNECTED' ? <Wifi size={14} /> : 
+               connectionStatus === 'FAILED' ? <WifiOff size={14} /> : <Wifi size={14} />}
+              {connectionStatus === 'CHECKING' ? 'Verifying...' : 
+               connectionStatus === 'CONNECTED' ? 'Successfully Linked' : 
+               connectionStatus === 'FAILED' ? 'Link Failed - Check Settings' : 'Test Connection'}
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
@@ -119,6 +146,9 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                    Important: Ensure you click "Apply Settings" above after updating your URL and Key, or the Cloud connection will not activate.
                  </p>
               </div>
+              <p className="text-xs text-slate-400 mt-2">
+                <span className="font-bold text-slate-300">Tip:</span> Use the "Share Setup Link" button above to generate a URL you can send to other authorized devices to sync them instantly.
+              </p>
            </div>
         </div>
       </div>
