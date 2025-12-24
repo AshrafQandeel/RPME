@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { Client, EntityType, RiskLevel, KYCDirector, KYCShareholder, KYCUBO, KYCAuthorizedSignatory } from '../types';
-import { Plus, Search, Filter, Trash2, Edit, RefreshCw, Building2, UserPlus, ShieldCheck, FileText, Upload, X, Check, Users, Briefcase, Landmark } from 'lucide-react';
+import { Plus, Search, Filter, Trash2, Edit, RefreshCw, Building2, UserPlus, ShieldCheck, FileText, Upload, X, Check, Users, Briefcase, Landmark, Globe, Mail, Phone, ExternalLink } from 'lucide-react';
 
 interface ClientManagerProps {
   clients: Client[];
@@ -12,8 +13,6 @@ interface ClientManagerProps {
 const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onDeleteClient, onRefresh }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  
-  const initialBase: any = { name: '', nationality: '', dob: '', qidOrPassport: '' };
 
   const [formData, setFormData] = useState<Omit<Client, 'id' | 'createdAt' | 'riskLevel'>>({
     no: '',
@@ -24,7 +23,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
     firstName: '',
     companyType: '',
     servicesNeeded: '',
-    engagementYear: new Date().getFullYear(),
+    engagementYear: new Date().getFullYear().toString(),
     engagementDate: '',
     onboardingDate: '',
     incorporationDate: '',
@@ -39,10 +38,10 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
     telephoneNumber: '',
     emailAddress: '',
     website: '',
-    directors: [{ ...initialBase }],
-    shareholders: [{ ...initialBase, ownershipPercentage: 0, incDateOrDob: '' }],
-    ubos: [{ ...initialBase }],
-    signatories: [{ ...initialBase, authority: '' }],
+    directors: [{ name: '', qidOrPassport: '', nationality: '', dob: '' }],
+    shareholders: [{ name: '', ownershipPercentage: 0, qidPassportCrNo: '', nationality: '', dobOrDoi: '' }],
+    ubos: [{ name: '', qidOrPassport: '', nationality: '', dob: '' }],
+    signatories: [{ name: '', qidOrPassport: '', nationality: '', dob: '', authority: '' }],
     secretary: '',
     seniorExecutiveFunction: '',
     isPep: false,
@@ -54,9 +53,11 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
   });
 
   const handleAddEntry = (type: 'directors' | 'shareholders' | 'ubos' | 'signatories') => {
-    const fresh = { ...initialBase };
-    if (type === 'shareholders') { fresh.ownershipPercentage = 0; fresh.incDateOrDob = ''; }
-    if (type === 'signatories') { fresh.authority = ''; }
+    let fresh: any;
+    if (type === 'directors') fresh = { name: '', qidOrPassport: '', nationality: '', dob: '' };
+    if (type === 'shareholders') fresh = { name: '', ownershipPercentage: 0, qidPassportCrNo: '', nationality: '', dobOrDoi: '' };
+    if (type === 'ubos') fresh = { name: '', qidOrPassport: '', nationality: '', dob: '' };
+    if (type === 'signatories') fresh = { name: '', qidOrPassport: '', nationality: '', dob: '', authority: '' };
     
     setFormData(prev => ({ ...prev, [type]: [...prev[type], fresh] }));
   };
@@ -90,18 +91,18 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">Onboarding & Compliance</h2>
-          <p className="text-sm text-gray-500">KYC/AML Client Lifecycle Management</p>
+          <h2 className="text-2xl font-bold text-gray-800">Client Compliance & Onboarding</h2>
+          <p className="text-sm text-gray-500">Corporate KYC Lifecycle Management</p>
         </div>
         <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-2xl transition-all shadow-xl shadow-indigo-100 font-bold">
-          <Plus size={20} /> New Client Onboarding
+          <Plus size={20} /> Start New Onboarding
         </button>
       </div>
 
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex gap-4 items-center">
         <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-          <input type="text" placeholder="Search by Client Name, QFC No, or Status..." className="w-full pl-12 pr-4 py-3 bg-gray-50/50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+          <input type="text" placeholder="Search by Client Name, QFC No, or No..." className="w-full pl-12 pr-4 py-3 bg-gray-50/50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none transition-all" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
         <button className="flex items-center gap-2 px-5 py-3 border border-gray-100 rounded-xl hover:bg-gray-50 text-gray-700 font-semibold transition-colors">
           <Filter size={18} /> Filters
@@ -113,8 +114,8 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
           <thead className="bg-gray-50/50 text-gray-400 border-b border-gray-100">
             <tr>
               <th className="px-8 py-4 text-[10px] font-black uppercase tracking-widest">Client Identity</th>
-              <th className="px-8 py-4 text-[10px] font-black uppercase tracking-widest">Registration</th>
-              <th className="px-8 py-4 text-[10px] font-black uppercase tracking-widest">Status</th>
+              <th className="px-8 py-4 text-[10px] font-black uppercase tracking-widest">Status / No</th>
+              <th className="px-8 py-4 text-[10px] font-black uppercase tracking-widest">Type</th>
               <th className="px-8 py-4 text-[10px] font-black uppercase tracking-widest">Compliance</th>
               <th className="px-8 py-4 text-[10px] font-black uppercase tracking-widest text-right">Actions</th>
             </tr>
@@ -124,20 +125,19 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
               <tr key={client.id} className="hover:bg-indigo-50/30 transition-colors">
                 <td className="px-8 py-5">
                   <div className="font-bold text-gray-900">{client.firstName}</div>
-                  <div className="text-[10px] text-gray-400 font-medium">QFC No: {client.qfcNo || 'N/A'} • {client.legalStructure}</div>
+                  <div className="text-[10px] text-gray-400 font-medium">QFC: {client.qfcNo || 'N/A'} • {client.corporateNationality}</div>
                 </td>
                 <td className="px-8 py-5">
-                  <div className="text-sm font-bold text-gray-700">Ref: {client.no}</div>
-                  <div className="text-[10px] text-gray-400 uppercase">Onboarded: {client.onboardingDate}</div>
+                  <div className="flex flex-col">
+                    <span className={`w-fit px-2 py-0.5 rounded-full text-[9px] font-bold mb-1 ${
+                      client.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                    }`}>
+                      {client.status}
+                    </span>
+                    <span className="text-xs font-bold text-gray-600">No: {client.no}</span>
+                  </div>
                 </td>
-                <td className="px-8 py-5">
-                  <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                    client.status === 'Active' ? 'bg-green-100 text-green-700' : 
-                    client.status === 'Pending' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
-                  }`}>
-                    {client.status}
-                  </span>
-                </td>
+                <td className="px-8 py-5 text-xs text-gray-500">{client.companyType}</td>
                 <td className="px-8 py-5">{getRiskBadge(client.riskLevel)}</td>
                 <td className="px-8 py-5 text-right">
                   <div className="flex justify-end gap-2">
@@ -158,8 +158,8 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
               <div className="flex items-center gap-4">
                 <div className="bg-white/20 p-2.5 rounded-2xl"><ShieldCheck size={28}/></div>
                 <div>
-                  <h3 className="text-2xl font-black tracking-tight">Onboarding & KYC Portal</h3>
-                  <p className="text-xs text-indigo-100 font-bold uppercase tracking-widest opacity-80">QFC / MOCI Compliance Framework</p>
+                  <h3 className="text-2xl font-black tracking-tight">Onboarding Form</h3>
+                  <p className="text-xs text-indigo-100 font-bold uppercase tracking-widest opacity-80">KYC / AML Compliance Protocol</p>
                 </div>
               </div>
               <button onClick={() => setIsModalOpen(false)} className="text-white/70 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors"><X size={24}/></button>
@@ -170,12 +170,12 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
               <section className="space-y-6">
                 <div className="flex items-center gap-3 text-indigo-700 font-black text-sm uppercase tracking-wider border-b border-indigo-50 pb-2">
                   <Briefcase size={20} />
-                  <span>1. Company & Engagement Information</span>
+                  <span>Company & Engagement Information</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-gray-400 uppercase">System No *</label>
-                    <input required className="w-full border-gray-100 border-2 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="e.g. 2024-001" value={formData.no} onChange={e => setFormData({...formData, no: e.target.value})} />
+                    <label className="text-[10px] font-black text-gray-400 uppercase">No *</label>
+                    <input required className="w-full border-gray-100 border-2 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500 outline-none" value={formData.no} onChange={e => setFormData({...formData, no: e.target.value})} />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-gray-400 uppercase">Status *</label>
@@ -183,23 +183,36 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
                       <option value="Pending">Pending</option>
                       <option value="Active">Active</option>
                       <option value="Closed">Closed</option>
+                      <option value="Blacklisted">Blacklisted</option>
                     </select>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-gray-400 uppercase">QFC No</label>
-                    <input className="w-full border-gray-100 border-2 rounded-xl p-3" placeholder="If applicable" value={formData.qfcNo} onChange={e => setFormData({...formData, qfcNo: e.target.value})} />
+                    <input className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.qfcNo} onChange={e => setFormData({...formData, qfcNo: e.target.value})} />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-gray-400 uppercase">Legal Structure *</label>
-                    <input required className="w-full border-gray-100 border-2 rounded-xl p-3" placeholder="e.g. LLC" value={formData.legalStructure} onChange={e => setFormData({...formData, legalStructure: e.target.value})} />
+                    <input required className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.legalStructure} onChange={e => setFormData({...formData, legalStructure: e.target.value})} />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-gray-400 uppercase">Corporate Nationality *</label>
-                    <input required className="w-full border-gray-100 border-2 rounded-xl p-3" placeholder="e.g. Qatari" value={formData.corporateNationality} onChange={e => setFormData({...formData, corporateNationality: e.target.value})} />
+                    <input required className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.corporateNationality} onChange={e => setFormData({...formData, corporateNationality: e.target.value})} />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-gray-400 uppercase">Client Name *</label>
                     <input required className="w-full border-gray-100 border-2 rounded-xl p-3 font-bold" value={formData.firstName} onChange={e => setFormData({...formData, firstName: e.target.value})} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase">Company Type *</label>
+                    <input required className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.companyType} onChange={e => setFormData({...formData, companyType: e.target.value})} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase">Services needed *</label>
+                    <input required className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.servicesNeeded} onChange={e => setFormData({...formData, servicesNeeded: e.target.value})} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase">Engagement Year *</label>
+                    <input required type="number" className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.engagementYear} onChange={e => setFormData({...formData, engagementYear: e.target.value})} />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-gray-400 uppercase">Engagement Date *</label>
@@ -210,7 +223,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
                     <input type="date" required className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.onboardingDate} onChange={e => setFormData({...formData, onboardingDate: e.target.value})} />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-gray-400 uppercase">Incorporation Date *</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase">Date of QFC Incorporation or Registration *</label>
                     <input type="date" required className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.incorporationDate} onChange={e => setFormData({...formData, incorporationDate: e.target.value})} />
                   </div>
                 </div>
@@ -220,11 +233,11 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
               <section className="space-y-6">
                 <div className="flex items-center gap-3 text-indigo-700 font-black text-sm uppercase tracking-wider border-b border-indigo-50 pb-2">
                   <Landmark size={20} />
-                  <span>2. Registration & Licensing Details</span>
+                  <span>Registration & Licensing Details</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-gray-400 uppercase">CR Expiry Date *</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase">CR Expired date *</label>
                     <input type="date" required className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.crExpiryDate} onChange={e => setFormData({...formData, crExpiryDate: e.target.value})} />
                   </div>
                   <div className="space-y-1">
@@ -232,8 +245,16 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
                     <input required className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.entityCardNo} onChange={e => setFormData({...formData, entityCardNo: e.target.value})} />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-gray-400 uppercase">License No</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase">Entity Card Expiry *</label>
+                    <input type="date" required className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.entityCardExpiry} onChange={e => setFormData({...formData, entityCardExpiry: e.target.value})} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase">License</label>
                     <input className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.license} onChange={e => setFormData({...formData, license: e.target.value})} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase">License Expiry</label>
+                    <input type="date" className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.licenseExpiry} onChange={e => setFormData({...formData, licenseExpiry: e.target.value})} />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-gray-400 uppercase">Approved Auditor</label>
@@ -242,71 +263,188 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
                 </div>
               </section>
 
-              {/* SECTION 3: Dynamic Personnel Sections */}
-              {[
-                { title: 'Directors', key: 'directors', icon: <Users size={20}/> },
-                { title: 'Significant Shareholders', key: 'shareholders', icon: <Landmark size={20}/> },
-                { title: 'Ultimate Beneficial Owners (UBOs)', key: 'ubos', icon: <ShieldCheck size={20}/> },
-                { title: 'Authorized Signatories', key: 'signatories', icon: <FileText size={20}/> }
-              ].map((section) => (
-                <section key={section.key} className="space-y-6">
-                  <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                    <div className="flex items-center gap-3 text-indigo-700 font-black text-sm uppercase tracking-wider">
-                      {section.icon}
-                      <span>3. {section.title}</span>
+              {/* SECTION 3: Business & Contact Details */}
+              <section className="space-y-6">
+                <div className="flex items-center gap-3 text-indigo-700 font-black text-sm uppercase tracking-wider border-b border-indigo-50 pb-2">
+                  <Globe size={20} />
+                  <span>Business & Contact Details</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase">Nature of Business *</label>
+                    <input required className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.natureOfBusiness} onChange={e => setFormData({...formData, natureOfBusiness: e.target.value})} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase">Registered Address *</label>
+                    <input required className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.registeredAddress} onChange={e => setFormData({...formData, registeredAddress: e.target.value})} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase flex items-center gap-1"><Phone size={12}/> Telephone Number *</label>
+                    <input required className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.telephoneNumber} onChange={e => setFormData({...formData, telephoneNumber: e.target.value})} />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase flex items-center gap-1"><Mail size={12}/> E Mail *</label>
+                    <input required type="email" className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.emailAddress} onChange={e => setFormData({...formData, emailAddress: e.target.value})} />
+                  </div>
+                  <div className="md:col-span-2 space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase flex items-center gap-1"><ExternalLink size={12}/> Website</label>
+                    <input className="w-full border-gray-100 border-2 rounded-xl p-3" value={formData.website} onChange={e => setFormData({...formData, website: e.target.value})} />
+                  </div>
+                </div>
+              </section>
+
+              {/* SECTION 4: Multi-Entry Personnel */}
+              <section className="space-y-10">
+                {/* Directors */}
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                    <div className="flex items-center gap-3 text-indigo-700 font-black text-sm uppercase">
+                      <Users size={20} />
+                      <span>Directors</span>
                     </div>
-                    <button type="button" onClick={() => handleAddEntry(section.key as any)} className="bg-indigo-50 text-indigo-600 px-4 py-2 rounded-xl hover:bg-indigo-100 transition-all text-xs font-bold flex items-center gap-2">
-                      <Plus size={16} /> Add Entry
+                    <button type="button" onClick={() => handleAddEntry('directors')} className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-all flex items-center gap-1">
+                      <Plus size={14} /> Add another director
                     </button>
                   </div>
-                  
-                  <div className="space-y-4">
-                    {(formData[section.key as any] as any[]).map((person, index) => (
-                      <div key={index} className="bg-gray-50/50 p-6 rounded-3xl border-2 border-dashed border-gray-100 relative group hover:border-indigo-200 hover:bg-white transition-all">
-                        <button type="button" onClick={() => handleRemoveEntry(section.key as any, index)} className="absolute -top-3 -right-3 bg-white text-red-500 p-2 rounded-full shadow-lg border border-red-50 opacity-0 group-hover:opacity-100 transition-all">
-                          <Trash2 size={16} />
-                        </button>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                          <div className="md:col-span-2">
-                            <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Full Name *</label>
-                            <input required className="w-full border-gray-200 border rounded-xl p-2.5 text-sm font-bold bg-white" value={person.name} onChange={e => handleEntryChange(section.key as any, index, 'name', e.target.value)} />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block">QID / Passport *</label>
-                            <input required className="w-full border-gray-200 border rounded-xl p-2.5 text-sm font-mono bg-white" value={person.qidOrPassport} onChange={e => handleEntryChange(section.key as any, index, 'qidOrPassport', e.target.value)} />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Nationality *</label>
-                            <input required className="w-full border-gray-200 border rounded-xl p-2.5 text-sm bg-white" value={person.nationality} onChange={e => handleEntryChange(section.key as any, index, 'nationality', e.target.value)} />
-                          </div>
-                          <div>
-                            <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block">{section.key === 'shareholders' ? 'Date of Inc/DOB' : 'DOB'} *</label>
-                            <input type="date" required className="w-full border-gray-200 border rounded-xl p-2.5 text-sm bg-white" value={person.dob || person.incDateOrDob} onChange={e => handleEntryChange(section.key as any, index, section.key === 'shareholders' ? 'incDateOrDob' : 'dob', e.target.value)} />
-                          </div>
-                          {section.key === 'shareholders' && (
-                            <div>
-                              <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Ownership % *</label>
-                              <input type="number" step="0.01" required className="w-full border-gray-200 border rounded-xl p-2.5 text-sm font-bold bg-white" value={person.ownershipPercentage} onChange={e => handleEntryChange('shareholders', index, 'ownershipPercentage', parseFloat(e.target.value))} />
-                            </div>
-                          )}
-                          {section.key === 'signatories' && (
-                            <div className="md:col-span-2">
-                              <label className="text-[10px] font-black text-gray-400 uppercase mb-1 block">Authority Level *</label>
-                              <input required className="w-full border-gray-200 border rounded-xl p-2.5 text-sm bg-white" placeholder="e.g. Managing Director" value={person.authority} onChange={e => handleEntryChange('signatories', index, 'authority', e.target.value)} />
-                            </div>
-                          )}
-                        </div>
+                  {formData.directors.map((p, i) => (
+                    <div key={i} className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-50/50 p-4 rounded-2xl relative group">
+                      <button type="button" onClick={() => handleRemoveEntry('directors', i)} className="absolute -top-2 -right-2 bg-white text-red-500 p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-all border border-red-50"><Trash2 size={14}/></button>
+                      <div className="md:col-span-1">
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Director Names *</label>
+                        <input required className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.name} onChange={e => handleEntryChange('directors', i, 'name', e.target.value)} />
                       </div>
-                    ))}
-                  </div>
-                </section>
-              ))}
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">QID / Passport *</label>
+                        <input required className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.qidOrPassport} onChange={e => handleEntryChange('directors', i, 'qidOrPassport', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Nationality *</label>
+                        <input required className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.nationality} onChange={e => handleEntryChange('directors', i, 'nationality', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">DOB *</label>
+                        <input required type="date" className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.dob} onChange={e => handleEntryChange('directors', i, 'dob', e.target.value)} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
-              {/* SECTION 4: Governance */}
+                {/* Shareholders */}
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                    <div className="flex items-center gap-3 text-indigo-700 font-black text-sm uppercase">
+                      <Landmark size={20} />
+                      <span>Significant Shareholders</span>
+                    </div>
+                    <button type="button" onClick={() => handleAddEntry('shareholders')} className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-all flex items-center gap-1">
+                      <Plus size={14} /> Add another shareholder
+                    </button>
+                  </div>
+                  {formData.shareholders.map((p, i) => (
+                    <div key={i} className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-gray-50/50 p-4 rounded-2xl relative group">
+                      <button type="button" onClick={() => handleRemoveEntry('shareholders', i)} className="absolute -top-2 -right-2 bg-white text-red-500 p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-all border border-red-50"><Trash2 size={14}/></button>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Shareholder Name *</label>
+                        <input required className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.name} onChange={e => handleEntryChange('shareholders', i, 'name', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">% on Ownership *</label>
+                        <input required type="number" step="0.01" className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.ownershipPercentage} onChange={e => handleEntryChange('shareholders', i, 'ownershipPercentage', parseFloat(e.target.value))} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">QID / Passport / CR No. *</label>
+                        <input required className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.qidPassportCrNo} onChange={e => handleEntryChange('shareholders', i, 'qidPassportCrNo', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Nationality *</label>
+                        <input required className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.nationality} onChange={e => handleEntryChange('shareholders', i, 'nationality', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">DOB/ Date of incorporation *</label>
+                        <input required type="date" className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.dobOrDoi} onChange={e => handleEntryChange('shareholders', i, 'dobOrDoi', e.target.value)} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* UBOs */}
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                    <div className="flex items-center gap-3 text-indigo-700 font-black text-sm uppercase">
+                      <ShieldCheck size={20} />
+                      <span>UBO Details</span>
+                    </div>
+                    <button type="button" onClick={() => handleAddEntry('ubos')} className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-all flex items-center gap-1">
+                      <Plus size={14} /> Add another UBO
+                    </button>
+                  </div>
+                  {formData.ubos.map((p, i) => (
+                    <div key={i} className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-50/50 p-4 rounded-2xl relative group">
+                      <button type="button" onClick={() => handleRemoveEntry('ubos', i)} className="absolute -top-2 -right-2 bg-white text-red-500 p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-all border border-red-50"><Trash2 size={14}/></button>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Name *</label>
+                        <input required className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.name} onChange={e => handleEntryChange('ubos', i, 'name', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">QID / Passport *</label>
+                        <input required className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.qidOrPassport} onChange={e => handleEntryChange('ubos', i, 'qidOrPassport', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Nationality *</label>
+                        <input required className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.nationality} onChange={e => handleEntryChange('ubos', i, 'nationality', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">DOB *</label>
+                        <input required type="date" className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.dob} onChange={e => handleEntryChange('ubos', i, 'dob', e.target.value)} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Authorized Signatories */}
+                <div className="space-y-4">
+                  <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+                    <div className="flex items-center gap-3 text-indigo-700 font-black text-sm uppercase">
+                      <FileText size={20} />
+                      <span>Authorized Signatory</span>
+                    </div>
+                    <button type="button" onClick={() => handleAddEntry('signatories')} className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg hover:bg-indigo-100 transition-all flex items-center gap-1">
+                      <Plus size={14} /> Add another authorized signatory
+                    </button>
+                  </div>
+                  {formData.signatories.map((p, i) => (
+                    <div key={i} className="grid grid-cols-1 md:grid-cols-5 gap-4 bg-gray-50/50 p-4 rounded-2xl relative group">
+                      <button type="button" onClick={() => handleRemoveEntry('signatories', i)} className="absolute -top-2 -right-2 bg-white text-red-500 p-1.5 rounded-full shadow-sm opacity-0 group-hover:opacity-100 transition-all border border-red-50"><Trash2 size={14}/></button>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Name *</label>
+                        <input required className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.name} onChange={e => handleEntryChange('signatories', i, 'name', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">QID / Passport *</label>
+                        <input required className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.qidOrPassport} onChange={e => handleEntryChange('signatories', i, 'qidOrPassport', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Nationality *</label>
+                        <input required className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.nationality} onChange={e => handleEntryChange('signatories', i, 'nationality', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">DOB *</label>
+                        <input required type="date" className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.dob} onChange={e => handleEntryChange('signatories', i, 'dob', e.target.value)} />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-black text-gray-400 uppercase block mb-1">Authority *</label>
+                        <input required className="w-full p-2 text-sm border-gray-200 border rounded-xl" value={p.authority} onChange={e => handleEntryChange('signatories', i, 'authority', e.target.value)} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              {/* SECTION 5: Governance & Roles */}
               <section className="space-y-6">
                 <div className="flex items-center gap-3 text-indigo-700 font-black text-sm uppercase tracking-wider border-b border-indigo-50 pb-2">
                   <ShieldCheck size={20} />
-                  <span>4. Governance & Key Roles</span>
+                  <span>Governance & Key Roles</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-1">
@@ -323,7 +461,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
               <div className="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-gray-100 py-8 flex justify-end gap-4 mt-8">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 py-4 text-gray-500 hover:bg-gray-50 rounded-2xl font-bold transition-all">Cancel Application</button>
                 <button type="submit" className="px-12 py-4 bg-indigo-600 text-white rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 font-black transition-all transform active:scale-95 flex items-center gap-3">
-                  <Check size={24} strokeWidth={3}/> Complete Onboarding & Screen
+                  <Check size={24} strokeWidth={3}/> Complete & Screen Record
                 </button>
               </div>
             </form>

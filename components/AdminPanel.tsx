@@ -1,6 +1,7 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { SystemLog, AppSettings } from '../types';
-import { FileDown, ShieldCheck, RefreshCw, Save, Globe, Database, Upload, Download, AlertCircle, Cloud, Terminal, Check, Smartphone, Copy } from 'lucide-react';
+import { Save, Cloud, Terminal, Check, Copy } from 'lucide-react';
 
 interface AdminPanelProps {
   logs: SystemLog[];
@@ -23,7 +24,6 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 }) => {
   const [localSettings, setLocalSettings] = useState<AppSettings>(settings);
   const [hasChanges, setHasChanges] = useState(false);
-  const [showSql, setShowSql] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [copiedSql, setCopiedSql] = useState(false);
 
@@ -42,7 +42,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const sqlScript = `
--- UNSanctionGuard Corporate KYC Schema v1.5
+-- UNSanctionGuard Corporate KYC Schema v1.6
 -- Run this in your Supabase SQL Editor
 
 DROP TABLE IF EXISTS clients;
@@ -57,12 +57,12 @@ CREATE TABLE clients (
   first_name TEXT NOT NULL, -- Client Name
   company_type TEXT,
   services_needed TEXT,
-  engagement_year INTEGER,
+  engagement_year TEXT,
   engagement_date TEXT,
   onboarding_date TEXT,
-  incorporation_date TEXT,
+  incorporation_date TEXT, -- Date of QFC Incorporation or Registration
   
-  cr_expiry_date TEXT,
+  cr_expiry_date TEXT, -- CR Expired date
   entity_card_no TEXT,
   entity_card_expiry TEXT,
   license TEXT,
@@ -141,7 +141,7 @@ CREATE POLICY "Public Access" ON clients FOR ALL USING (true) WITH CHECK (true);
         
         <div className="bg-slate-900 rounded-2xl overflow-hidden">
            <div className="bg-slate-800 px-6 py-3 flex justify-between items-center">
-              <span className="text-slate-300 text-sm font-bold flex items-center gap-2"><Terminal size={16} /> SQL Setup Script (v1.5)</span>
+              <span className="text-slate-300 text-sm font-bold flex items-center gap-2"><Terminal size={16} /> SQL Setup Script (v1.6)</span>
               <button onClick={copySql} className="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all">
                 {copiedSql ? <Check size={14} className="text-green-400"/> : <Copy size={14}/>}
                 {copiedSql ? 'Copied!' : 'Copy SQL'}

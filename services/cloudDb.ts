@@ -1,3 +1,4 @@
+
 import { createClient, RealtimeChannel } from '@supabase/supabase-js';
 import { Client, AppSettings, RiskLevel, EntityType } from '../types';
 
@@ -11,14 +12,14 @@ const toSupabaseFormat = (client: Client) => {
     qfc_no: client.qfcNo,
     legal_structure: client.legalStructure,
     corporate_nationality: client.corporateNationality,
-    first_name: client.firstName, // Mapping Client Name
+    first_name: client.firstName, // Client Name
     company_type: client.companyType,
     services_needed: client.servicesNeeded,
     engagement_year: client.engagementYear,
     engagement_date: client.engagementDate,
     onboarding_date: client.onboardingDate,
-    incorporation_date: client.incorporationDate,
-    cr_expiry_date: client.crExpiryDate,
+    incorporation_date: client.incorporationDate, // Date of QFC Incorporation or Registration
+    cr_expiry_date: client.crExpiryDate, // CR Expired date
     entity_card_no: client.entityCardNo,
     entity_card_expiry: client.entityCardExpiry,
     license: client.license,
@@ -57,7 +58,7 @@ const fromSupabaseFormat = (data: any): Client => {
     firstName: data.first_name,
     companyType: data.company_type,
     servicesNeeded: data.services_needed,
-    engagementYear: data.engagement_year,
+    engagementYear: data.engagement_year?.toString() || '',
     engagementDate: data.engagement_date,
     onboardingDate: data.onboarding_date,
     incorporationDate: data.incorporation_date,

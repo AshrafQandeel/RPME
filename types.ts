@@ -1,3 +1,4 @@
+
 export enum RiskLevel {
   NONE = 'None',
   LOW = 'Low',
@@ -27,64 +28,74 @@ export interface SanctionEntry {
   type: EntityType;
 }
 
-export interface KYCBasePerson {
+export interface KYCDirector {
   name: string;
+  qidOrPassport: string;
   nationality: string;
   dob: string;
-  qidOrPassport: string;
 }
 
-export interface KYCDirector extends KYCBasePerson {}
-
-export interface KYCShareholder extends KYCBasePerson {
+export interface KYCShareholder {
+  name: string;
   ownershipPercentage: number;
-  incDateOrDob: string; // Shareholders can be entities or individuals
+  qidPassportCrNo: string;
+  nationality: string;
+  dobOrDoi: string; // Date of Birth / Date of Incorporation
 }
 
-export interface KYCUBO extends KYCBasePerson {}
+export interface KYCUBO {
+  name: string;
+  qidOrPassport: string;
+  nationality: string;
+  dob: string;
+}
 
-export interface KYCAuthorizedSignatory extends KYCBasePerson {
+export interface KYCAuthorizedSignatory {
+  name: string;
+  qidOrPassport: string;
+  nationality: string;
+  dob: string;
   authority: string;
 }
 
 export interface Client {
   id: string;
-  // 1. Company & Engagement Information
+  // Company & Engagement Information
   no: string;
   status: 'Active' | 'Pending' | 'Closed' | 'Blacklisted';
   qfcNo: string;
   legalStructure: string;
   corporateNationality: string;
-  firstName: string; // Mapping to "Client Name"
+  firstName: string; // Used for "Client Name"
   companyType: string;
   servicesNeeded: string;
-  engagementYear: number;
+  engagementYear: string;
   engagementDate: string;
   onboardingDate: string;
-  incorporationDate: string;
+  incorporationDate: string; // Date of QFC Incorporation or Registration
   
-  // 2. Registration & Licensing Details
-  crExpiryDate: string;
+  // Registration & Licensing Details
+  crExpiryDate: string; // CR Expired date
   entityCardNo: string;
   entityCardExpiry: string;
   license: string;
   licenseExpiry: string;
   approvedAuditor: string;
 
-  // 3. Business & Contact Details
+  // Business & Contact Details
   natureOfBusiness: string;
   registeredAddress: string;
   telephoneNumber: string;
-  emailAddress: string;
+  emailAddress: string; // E Mail
   website?: string;
 
-  // 4. Personnel Sections
+  // Personnel Sections
   directors: KYCDirector[];
   shareholders: KYCShareholder[];
   ubos: KYCUBO[];
   signatories: KYCAuthorizedSignatory[];
 
-  // 5. Governance & Key Roles
+  // Governance & Key Roles
   secretary: string;
   seniorExecutiveFunction: string;
   

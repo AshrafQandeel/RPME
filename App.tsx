@@ -5,7 +5,8 @@ import Dashboard from './components/Dashboard';
 import ClientManager from './components/ClientManager';
 import SanctionsBrowser from './components/SanctionsBrowser';
 import AdminPanel from './components/AdminPanel';
-import { Client, SanctionEntry, SystemLog, RiskLevel, EntityType, AppSettings, KYCBasePerson } from './types';
+// Removed KYCBasePerson as it is not exported from types.ts
+import { Client, SanctionEntry, SystemLog, RiskLevel, EntityType, AppSettings } from './types';
 import { generateMockSanctions, QATAR_MOCK_SANCTIONS } from './services/mockData';
 import { screenClient } from './services/screeningEngine';
 import { fetchFromUrl, parseUNSanctionsXML, OFFICIAL_UN_XML_URL } from './services/unSanctionsService';
