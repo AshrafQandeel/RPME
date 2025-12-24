@@ -10,7 +10,7 @@ import { Client, SanctionEntry, SystemLog, RiskLevel, EntityType, AppSettings } 
 import { generateMockSanctions, QATAR_MOCK_SANCTIONS } from './services/mockData';
 import { screenClient } from './services/screeningEngine';
 import { OFFICIAL_UN_XML_URL } from './services/unSanctionsService';
-import { initSupabase, fetchCloudClients, addCloudClient, deleteCloudClient, subscribeToClients, unsubscribeFromClients } from './services/cloudDb';
+import { initSupabase, fetchCloudClients, addCloudClient, deleteCloudClient, subscribeToClients, unsubscribeFromClients, checkConnection } from './services/cloudDb';
 
 const DEFAULT_SETTINGS: AppSettings = {
   autoSync: true,
@@ -44,54 +44,6 @@ const App: React.FC = () => {
     setLogs(prev => [...prev, newLog]);
   }, []);
 
-  const runScreening = useCallback((client: Client, sanctionList: SanctionEntry[]): Client => {
-    let highestRisk = RiskLevel.NONE;
-    let mainMatchId: string | undefined;
-    const allMatches: string[] = [];
-
-    const entityMatch = screenClient(client, sanctionList);
-    if (entityMatch) {
-      highestRisk = entityMatch.riskLevel;
-      mainMatchId = entityMatch.sanctionId;
-      allMatches.push(`Entity: ${entityMatch.sanctionId}`);
-    }
-
-    const personSets = [
-      { label: 'Director', people: client.directors },
-      { label: 'Shareholder', people: client.shareholders },
-      { label: 'UBO', people: client.ubos },
-      { label: 'Signatory', people: client.signatories }
-    ];
-
-    for (const set of personSets) {
-      for (const p of (set.people || [])) {
-        if (!p.name) continue;
-        const mockClient: any = {
-          firstName: p.name,
-          lastName: '',
-          nationality: p.nationality,
-          // Fixed: Cast to any to safely access dob or dobOrDoi on union of personnel types
-          dob: (p as any).dob || (p as any).dobOrDoi,
-          type: EntityType.INDIVIDUAL
-        };
-        const match = screenClient(mockClient, sanctionList);
-        if (match) {
-          allMatches.push(`${set.label} (${p.name}): ${match.sanctionId}`);
-          if (
-            (match.riskLevel === RiskLevel.HIGH) ||
-            (match.riskLevel === RiskLevel.MEDIUM && highestRisk !== RiskLevel.HIGH) ||
-            (match.riskLevel === RiskLevel.LOW && highestRisk === RiskLevel.NONE)
-          ) {
-            highestRisk = match.riskLevel;
-            if (!mainMatchId) mainMatchId = match.sanctionId;
-          }
-        }
-      }
-    }
-
-    return { ...client, lastScreenedAt: new Date().toISOString(), riskLevel: highestRisk, matchId: mainMatchId, matches: allMatches };
-  }, []);
-
   const refreshClients = useCallback(async (isCurrentlyConnected: boolean) => {
     if (isCurrentlyConnected) {
       try {
@@ -99,88 +51,92 @@ const App: React.FC = () => {
         if (cloudClients) {
           setClients(cloudClients);
           setCloudError(null);
-          addLog('CLOUD_SYNC', `Successfully fetched ${cloudClients.length} clients.`, 'SUCCESS');
+          addLog('CLOUD_SYNC', `Successfully fetched ${cloudClients.length} clients from cloud.`, 'SUCCESS');
         }
       } catch (err: any) {
         console.error("Fetch error:", err);
-        if (err.message?.includes("does not exist")) {
-           setCloudError("Database Schema Mismatch: Run the SQL Script in Admin Panel.");
-        } else {
-           setCloudError(`Cloud Connection Error: ${err.message}`);
-        }
+        setCloudError(`Database Error: ${err.message || 'Could not reach table'}`);
         addLog('CLOUD_ERROR', `Sync failed: ${err.message}`, 'FAILURE');
       }
     } else {
       const stored = localStorage.getItem('unsg_clients');
-      if (stored) setClients(JSON.parse(stored));
+      if (stored) {
+        setClients(JSON.parse(stored));
+      } else {
+        setClients([]);
+      }
     }
   }, [addLog]);
 
-  // Effect: React to settings changes (Initialize Supabase)
+  // Handle Cloud Connection Lifecycle
   useEffect(() => {
-    const connected = initSupabase(settings);
-    setIsCloudConnected(connected);
+    const connect = async () => {
+      const hasConfig = settings.supabaseUrl && settings.supabaseKey;
+      if (hasConfig) {
+        const initialized = initSupabase(settings);
+        if (initialized) {
+          const isHealthy = await checkConnection();
+          setIsCloudConnected(isHealthy);
+          if (isHealthy) {
+            setCloudError(null);
+            await refreshClients(true);
+            
+            // Setup Realtime
+            if (subscriptionRef.current) unsubscribeFromClients(subscriptionRef.current);
+            subscriptionRef.current = subscribeToClients(() => refreshClients(true));
+          } else {
+            setCloudError("Database connection failed. Check your URL/Key or table schema.");
+            refreshClients(false);
+          }
+        } else {
+          setIsCloudConnected(false);
+          refreshClients(false);
+        }
+      } else {
+        setIsCloudConnected(false);
+        refreshClients(false);
+      }
+    };
+
+    connect();
     localStorage.setItem('unsg_settings', JSON.stringify(settings));
-    
-    if (connected) {
-      setCloudError(null);
-      refreshClients(true);
-      
-      // Setup Realtime Subscription
-      if (subscriptionRef.current) unsubscribeFromClients(subscriptionRef.current);
-      subscriptionRef.current = subscribeToClients(() => refreshClients(true));
-    } else {
-      refreshClients(false);
-    }
 
     return () => {
       if (subscriptionRef.current) unsubscribeFromClients(subscriptionRef.current);
     };
   }, [settings, refreshClients]);
 
+  // Initial sanctions load
   useEffect(() => {
     const storedSanctions = localStorage.getItem('unsg_sanctions');
     if (storedSanctions) setSanctions(JSON.parse(storedSanctions));
     else setSanctions([...generateMockSanctions(10), ...QATAR_MOCK_SANCTIONS]);
   }, []);
 
-  useEffect(() => { if (!isCloudConnected) localStorage.setItem('unsg_clients', JSON.stringify(clients)); }, [clients, isCloudConnected]);
-  useEffect(() => { localStorage.setItem('unsg_sanctions', JSON.stringify(sanctions)); }, [sanctions]);
+  // Sync local cache when not connected
+  useEffect(() => { 
+    if (!isCloudConnected && clients.length > 0) {
+      localStorage.setItem('unsg_clients', JSON.stringify(clients)); 
+    }
+  }, [clients, isCloudConnected]);
 
   const handleAddClient = async (newClientData: Omit<Client, 'id' | 'createdAt' | 'riskLevel'>) => {
-    let newClient: Client = { 
-      ...newClientData, 
+    const newClient: Client = { 
+      ...newClientData as any, 
       id: Math.random().toString(36).substr(2, 9), 
       createdAt: new Date().toISOString(), 
       riskLevel: RiskLevel.NONE 
     };
-    newClient = runScreening(newClient, sanctions);
     
     if (isCloudConnected) {
       try {
         await addCloudClient(newClient);
-        // Realtime sync will handle the UI update
       } catch (e: any) {
         addLog('CLOUD_ERROR', e.message, 'FAILURE');
       }
     } else {
       setClients(prev => [newClient, ...prev]);
     }
-  };
-
-  const handleUpdateSanctions = async () => {
-    setIsUpdating(true);
-    addLog('SANCTION_UPDATE', 'Manual sync started.', 'SUCCESS');
-    try {
-      await new Promise(r => setTimeout(r, 1000));
-      const combined = [...generateMockSanctions(20), ...QATAR_MOCK_SANCTIONS];
-      setSanctions(combined);
-      const updated = clients.map(c => runScreening(c, combined));
-      setClients(updated);
-      setSettings(prev => ({ ...prev, lastSync: new Date().toISOString() }));
-      addLog('SANCTION_UPDATE', 'Sync complete.', 'SUCCESS');
-    } catch (e) { addLog('SANCTION_UPDATE', 'Sync failed.', 'FAILURE'); }
-    finally { setIsUpdating(false); }
   };
 
   return (
@@ -192,8 +148,8 @@ const App: React.FC = () => {
             if (isCloudConnected) await deleteCloudClient(id).catch(e => addLog('CLOUD_ERROR', e.message, 'FAILURE'));
             else setClients(prev => prev.filter(c => c.id !== id));
           }} onRefresh={() => refreshClients(isCloudConnected)} />} />
-          <Route path="/sanctions" element={<SanctionsBrowser sanctions={sanctions} lastUpdated={settings.lastSync} onRefresh={handleUpdateSanctions} isUpdating={isUpdating} onFileUpload={() => {}} />} />
-          <Route path="/admin" element={<AdminPanel logs={logs} settings={settings} onUpdateSettings={setSettings} onTriggerSync={handleUpdateSanctions} isSyncing={isUpdating} onExportData={() => {}} onImportData={() => {}} />} />
+          <Route path="/sanctions" element={<SanctionsBrowser sanctions={sanctions} lastUpdated={settings.lastSync} onRefresh={() => {}} isUpdating={isUpdating} onFileUpload={() => {}} />} />
+          <Route path="/admin" element={<AdminPanel logs={logs} settings={settings} onUpdateSettings={setSettings} onTriggerSync={() => {}} isSyncing={isUpdating} onExportData={() => {}} onImportData={() => {}} />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Layout>
