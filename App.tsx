@@ -29,7 +29,7 @@ const App: React.FC = () => {
     return stored ? JSON.parse(stored) : DEFAULT_SETTINGS;
   });
   const [isUpdating, setIsUpdating] = useState(false);
-  const [isCloudConnected, setIsCloudConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'LOCAL' | 'CONNECTING' | 'CONNECTED' | 'ERROR'>('LOCAL');
   const [cloudError, setCloudError] = useState<string | null>(null);
   const subscriptionRef = useRef<any>(null);
 
@@ -44,61 +44,63 @@ const App: React.FC = () => {
     setLogs(prev => [...prev, newLog]);
   }, []);
 
-  const refreshClients = useCallback(async (isCurrentlyConnected: boolean) => {
-    if (isCurrentlyConnected) {
+  const refreshClients = useCallback(async (isConnected: boolean) => {
+    if (isConnected) {
       try {
         const cloudClients = await fetchCloudClients();
         if (cloudClients) {
           setClients(cloudClients);
           setCloudError(null);
-          addLog('CLOUD_SYNC', `Successfully fetched ${cloudClients.length} clients from cloud.`, 'SUCCESS');
+          addLog('CLOUD_SYNC', `Synced ${cloudClients.length} clients from cloud.`, 'SUCCESS');
         }
       } catch (err: any) {
-        console.error("Fetch error:", err);
-        setCloudError(`Database Error: ${err.message || 'Could not reach table'}`);
-        addLog('CLOUD_ERROR', `Sync failed: ${err.message}`, 'FAILURE');
+        setCloudError(`Cloud Fetch Error: ${err.message || 'Check database permissions'}`);
+        addLog('CLOUD_ERROR', `Cloud fetch failed.`, 'FAILURE');
       }
     } else {
       const stored = localStorage.getItem('unsg_clients');
-      if (stored) {
-        setClients(JSON.parse(stored));
-      } else {
-        setClients([]);
-      }
+      if (stored) setClients(JSON.parse(stored));
+      else setClients([]);
     }
   }, [addLog]);
 
   // Handle Cloud Connection Lifecycle
   useEffect(() => {
-    const connect = async () => {
+    const connectToCloud = async () => {
       const hasConfig = settings.supabaseUrl && settings.supabaseKey;
-      if (hasConfig) {
-        const initialized = initSupabase(settings);
-        if (initialized) {
-          const isHealthy = await checkConnection();
-          setIsCloudConnected(isHealthy);
-          if (isHealthy) {
-            setCloudError(null);
-            await refreshClients(true);
-            
-            // Setup Realtime
-            if (subscriptionRef.current) unsubscribeFromClients(subscriptionRef.current);
-            subscriptionRef.current = subscribeToClients(() => refreshClients(true));
-          } else {
-            setCloudError("Database connection failed. Check your URL/Key or table schema.");
-            refreshClients(false);
-          }
+      
+      if (!hasConfig) {
+        setConnectionStatus('LOCAL');
+        refreshClients(false);
+        return;
+      }
+
+      setConnectionStatus('CONNECTING');
+      const initialized = initSupabase(settings);
+      
+      if (initialized) {
+        const healthy = await checkConnection();
+        if (healthy) {
+          setConnectionStatus('CONNECTED');
+          setCloudError(null);
+          await refreshClients(true);
+          
+          // Setup Realtime
+          if (subscriptionRef.current) unsubscribeFromClients(subscriptionRef.current);
+          subscriptionRef.current = subscribeToClients(() => refreshClients(true));
         } else {
-          setIsCloudConnected(false);
+          setConnectionStatus('ERROR');
+          setCloudError("Connection established but 'clients' table not found or accessible.");
           refreshClients(false);
         }
       } else {
-        setIsCloudConnected(false);
+        setConnectionStatus('ERROR');
+        setCloudError("Invalid Supabase configuration URL or Key.");
         refreshClients(false);
       }
     };
 
-    connect();
+    connectToCloud();
     localStorage.setItem('unsg_settings', JSON.stringify(settings));
 
     return () => {
@@ -106,19 +108,12 @@ const App: React.FC = () => {
     };
   }, [settings, refreshClients]);
 
-  // Initial sanctions load
+  // Sanctions load
   useEffect(() => {
     const storedSanctions = localStorage.getItem('unsg_sanctions');
     if (storedSanctions) setSanctions(JSON.parse(storedSanctions));
     else setSanctions([...generateMockSanctions(10), ...QATAR_MOCK_SANCTIONS]);
   }, []);
-
-  // Sync local cache when not connected
-  useEffect(() => { 
-    if (!isCloudConnected && clients.length > 0) {
-      localStorage.setItem('unsg_clients', JSON.stringify(clients)); 
-    }
-  }, [clients, isCloudConnected]);
 
   const handleAddClient = async (newClientData: Omit<Client, 'id' | 'createdAt' | 'riskLevel'>) => {
     const newClient: Client = { 
@@ -128,7 +123,7 @@ const App: React.FC = () => {
       riskLevel: RiskLevel.NONE 
     };
     
-    if (isCloudConnected) {
+    if (connectionStatus === 'CONNECTED') {
       try {
         await addCloudClient(newClient);
       } catch (e: any) {
@@ -136,18 +131,28 @@ const App: React.FC = () => {
       }
     } else {
       setClients(prev => [newClient, ...prev]);
+      localStorage.setItem('unsg_clients', JSON.stringify([newClient, ...clients]));
     }
   };
 
   return (
     <Router>
-      <Layout cloudError={cloudError} isCloudConnected={isCloudConnected}>
+      <Layout 
+        cloudError={cloudError} 
+        isCloudConnected={connectionStatus === 'CONNECTED'} 
+        isConnecting={connectionStatus === 'CONNECTING'}
+      >
         <Routes>
           <Route path="/" element={<Dashboard clients={clients} sanctionsCount={sanctions.length} />} />
-          <Route path="/clients" element={<ClientManager clients={clients} onAddClient={handleAddClient} onDeleteClient={async id => {
-            if (isCloudConnected) await deleteCloudClient(id).catch(e => addLog('CLOUD_ERROR', e.message, 'FAILURE'));
-            else setClients(prev => prev.filter(c => c.id !== id));
-          }} onRefresh={() => refreshClients(isCloudConnected)} />} />
+          <Route path="/clients" element={<ClientManager 
+            clients={clients} 
+            onAddClient={handleAddClient} 
+            onDeleteClient={async id => {
+              if (connectionStatus === 'CONNECTED') await deleteCloudClient(id).catch(e => addLog('CLOUD_ERROR', e.message, 'FAILURE'));
+              else setClients(prev => prev.filter(c => c.id !== id));
+            }} 
+            onRefresh={() => refreshClients(connectionStatus === 'CONNECTED')} 
+          />} />
           <Route path="/sanctions" element={<SanctionsBrowser sanctions={sanctions} lastUpdated={settings.lastSync} onRefresh={() => {}} isUpdating={isUpdating} onFileUpload={() => {}} />} />
           <Route path="/admin" element={<AdminPanel logs={logs} settings={settings} onUpdateSettings={setSettings} onTriggerSync={() => {}} isSyncing={isUpdating} onExportData={() => {}} onImportData={() => {}} />} />
           <Route path="*" element={<Navigate to="/" replace />} />

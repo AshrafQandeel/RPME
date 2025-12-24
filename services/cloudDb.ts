@@ -4,6 +4,79 @@ import { Client, AppSettings, RiskLevel, EntityType } from '../types';
 
 let supabase: any = null;
 
+/**
+ * Maps a Client object to the exact column names found in the UN Security Council spreadsheet.
+ * This ensures that when you add a client from the UI, it saves correctly to your DB.
+ */
+const toSupabaseFormat = (client: Client) => {
+  return {
+    "No": client.no,
+    "Status": client.status,
+    "QFC No": client.qfcNo,
+    "Legal Structure": client.legalStructure,
+    "Corporate Nationality ": client.corporateNationality,
+    "Client Name": client.firstName,
+    "Services needed": client.servicesNeeded,
+    "Engagement Year ": client.engagementYear,
+    "Engagement Date": client.engagementDate,
+    "Onboarding Date ": client.onboardingDate,
+    "Date of QFC Incorporation or Registration": client.incorporationDate,
+    "CR Expired date": client.crExpiryDate,
+    "Entity Card No": client.entityCardNo,
+    "Entity Card Expiry": client.entityCardExpiry,
+    "License": client.license,
+    "License Expiry": client.licenseExpiry,
+    "Nature of Business": client.natureOfBusiness,
+    "Registered Address": client.registeredAddress,
+    "Telephone Number": client.telephoneNumber,
+    "E Mail": client.emailAddress,
+    "Website": client.website,
+    "Approved Auditor": client.approvedAuditor,
+    "Company Type": client.companyType,
+    "Secretary": client.secretary,
+    "Senior Executive Function": client.seniorExecutiveFunction,
+
+    // First Director
+    "Directors Names": client.directors[0]?.name || '',
+    "QID / Passport": client.directors[0]?.qidOrPassport || '',
+    "Nationality": client.directors[0]?.nationality || '',
+    "DOB": client.directors[0]?.dob || '',
+
+    // First Shareholder
+    "Significant Shareholders": client.shareholders[0]?.name || '',
+    "% on Ownership": client.shareholders[0]?.ownershipPercentage?.toString() || '0',
+    "QID / Passport / CR No.": client.shareholders[0]?.qidPassportCrNo || '',
+    "Nationality_1": client.shareholders[0]?.nationality || '',
+    "DOB/ Date of incorporation": client.shareholders[0]?.dobOrDoi || '',
+
+    // First UBO
+    "UBO Details": client.ubos[0]?.name || '',
+    "QID / Passport_1": client.ubos[0]?.qidOrPassport || '',
+    "Nationality_2": client.ubos[0]?.nationality || '',
+    "DOB_1": client.ubos[0]?.dob || '',
+
+    // First Signatory
+    "Authorized Signatory": client.signatories[0]?.name || '',
+    "QID / Passport_2": client.signatories[0]?.qidOrPassport || '',
+    "Nationality_3": client.signatories[0]?.nationality || '',
+    "DOB_2": client.signatories[0]?.dob || '',
+    "Authority": client.signatories[0]?.authority || '',
+
+    // System Metadata
+    is_pep: client.isPep,
+    type: client.type,
+    created_at: client.createdAt,
+    last_screened_at: client.lastScreenedAt,
+    risk_level: client.riskLevel,
+    match_id: client.matchId,
+    matches: client.matches || [],
+    documents: client.documents || {}
+  };
+};
+
+/**
+ * Robustly maps Supabase data (which may have trailing spaces in column names) to the Client interface.
+ */
 const fromSupabaseFormat = (data: any): Client => {
   if (!data) return {} as Client;
 
@@ -14,7 +87,6 @@ const fromSupabaseFormat = (data: any): Client => {
     return isNaN(num) ? 0 : num;
   };
 
-  // Helper to find a value even if keys have slightly different spacing or naming
   const getVal = (keys: string[]) => {
     for (const k of keys) {
       if (data[k] !== undefined && data[k] !== null) return data[k];
@@ -108,7 +180,11 @@ export const checkConnection = async (): Promise<boolean> => {
   if (!supabase) return false;
   try {
     const { error } = await supabase.from('clients').select('id').limit(1);
-    return !error;
+    if (error) {
+      console.warn("Connection check failed:", error.message);
+      return false;
+    }
+    return true;
   } catch {
     return false;
   }
@@ -130,8 +206,8 @@ export const fetchCloudClients = async (): Promise<Client[] | null> => {
 
 export const addCloudClient = async (client: Client): Promise<void> => {
   if (!supabase) return;
-  // (toSupabaseFormat logic omitted for brevity as it's defined in previous turns)
-  const { error } = await supabase.from('clients').insert([client]); 
+  const mapped = toSupabaseFormat(client);
+  const { error } = await supabase.from('clients').insert([mapped]); 
   if (error) throw error;
 };
 
@@ -150,7 +226,7 @@ export const subscribeToClients = (onUpdate: () => void): RealtimeChannel | null
 };
 
 export const unsubscribeFromClients = async (channel: RealtimeChannel | null) => {
-    if (supabase && channel) {
-      await supabase.removeChannel(channel);
-    }
+  if (supabase && channel) {
+    await supabase.removeChannel(channel);
+  }
 };
