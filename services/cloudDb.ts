@@ -5,19 +5,18 @@ import { Client, AppSettings, RiskLevel, EntityType } from '../types';
 let supabase: any = null;
 
 const toSupabaseFormat = (client: Client) => {
-  // Mapping the application object to the exact spreadsheet header names
   return {
     id: client.id,
     "No": client.no,
     "Status": client.status,
     "QFC No": client.qfcNo,
     "Legal Structure": client.legalStructure,
-    "Corporate Nationality ": client.corporateNationality, // Note trailing space
+    "Corporate Nationality ": client.corporateNationality,
     "Client Name": client.firstName,
     "Services needed": client.servicesNeeded,
-    "Engagement Year ": client.engagementYear, // Note trailing space
+    "Engagement Year ": client.engagementYear,
     "Engagement Date": client.engagementDate,
-    "Onboarding Date ": client.onboardingDate, // Note trailing space
+    "Onboarding Date ": client.onboardingDate,
     "Date of QFC Incorporation or Registration": client.incorporationDate,
     "CR Expired date": client.crExpiryDate,
     "Entity Card No": client.entityCardNo,
@@ -34,7 +33,6 @@ const toSupabaseFormat = (client: Client) => {
     "Secretary": client.secretary,
     "Senior Executive Function": client.seniorExecutiveFunction,
 
-    // Flat Personnel Mapping (Primary Entry)
     "Directors Names": client.directors[0]?.name || '',
     "QID / Passport": client.directors[0]?.qidOrPassport || '',
     "Nationality": client.directors[0]?.nationality || '',
@@ -57,7 +55,6 @@ const toSupabaseFormat = (client: Client) => {
     "DOB_2": client.signatories[0]?.dob || '',
     "Authority": client.signatories[0]?.authority || '',
 
-    // Technical Fields
     is_pep: client.isPep,
     type: client.type,
     created_at: client.createdAt,
@@ -70,7 +67,6 @@ const toSupabaseFormat = (client: Client) => {
 };
 
 const fromSupabaseFormat = (data: any): Client => {
-  // Helper to parse ownership percentage which might contain a '%' sign
   const parseOwnership = (val: any): number => {
     if (val === null || val === undefined) return 0;
     const strVal = val.toString().replace('%', '').trim();
@@ -78,60 +74,67 @@ const fromSupabaseFormat = (data: any): Client => {
     return isNaN(num) ? 0 : num;
   };
 
+  // Helper to find a value even if keys have slightly different spacing
+  const getVal = (keys: string[]) => {
+    for (const k of keys) {
+      if (data[k] !== undefined) return data[k];
+    }
+    return '';
+  };
+
   return {
     id: data.id,
-    no: data["No"] || '',
-    status: data["Status"] || 'Pending',
-    qfcNo: data["QFC No"] || '',
-    legalStructure: data["Legal Structure"] || '',
-    corporateNationality: data["Corporate Nationality "] || '',
-    firstName: data["Client Name"] || '',
-    companyType: data["Company Type"] || '',
-    servicesNeeded: data["Services needed"] || '',
-    engagementYear: data["Engagement Year "]?.toString() || '',
-    engagementDate: data["Engagement Date"] || '',
-    onboardingDate: data["Onboarding Date "] || '',
-    incorporationDate: data["Date of QFC Incorporation or Registration"] || '',
-    crExpiryDate: data["CR Expired date"] || '',
-    entityCardNo: data["Entity Card No"] || '',
-    entityCardExpiry: data["Entity Card Expiry"] || '',
-    license: data["License"] || '',
-    licenseExpiry: data["License Expiry"] || '',
-    approvedAuditor: data["Approved Auditor"] || '',
-    natureOfBusiness: data["Nature of Business"] || '',
-    registeredAddress: data["Registered Address"] || '',
-    telephoneNumber: data["Telephone Number"] || '',
-    emailAddress: data["E Mail"] || '',
-    website: data["Website"] || '',
-    secretary: data["Secretary"] || '',
-    seniorExecutiveFunction: data["Senior Executive Function"] || '',
+    no: getVal(["No", "No."]),
+    status: getVal(["Status", "Client Status"]) || 'Pending',
+    qfcNo: getVal(["QFC No", "QFC No."]),
+    legalStructure: getVal(["Legal Structure"]),
+    corporateNationality: getVal(["Corporate Nationality ", "Corporate Nationality"]),
+    firstName: getVal(["Client Name"]),
+    companyType: getVal(["Company Type"]),
+    servicesNeeded: getVal(["Services needed"]),
+    engagementYear: getVal(["Engagement Year ", "Engagement Year"])?.toString() || '',
+    engagementDate: getVal(["Engagement Date"]),
+    onboardingDate: getVal(["Onboarding Date ", "Onboarding Date"]),
+    incorporationDate: getVal(["Date of QFC Incorporation or Registration", "Incorporation Date"]),
+    crExpiryDate: getVal(["CR Expired date", "CR Expiry"]),
+    entityCardNo: getVal(["Entity Card No", "Entity Card No."]),
+    entityCardExpiry: getVal(["Entity Card Expiry"]),
+    license: getVal(["License"]),
+    licenseExpiry: getVal(["License Expiry"]),
+    approvedAuditor: getVal(["Approved Auditor"]),
+    natureOfBusiness: getVal(["Nature of Business"]),
+    registeredAddress: getVal(["Registered Address"]),
+    telephoneNumber: getVal(["Telephone Number"]),
+    emailAddress: getVal(["E Mail", "Email", "E-Mail"]),
+    website: getVal(["Website"]),
+    secretary: getVal(["Secretary"]),
+    seniorExecutiveFunction: getVal(["Senior Executive Function"]),
 
-    // Reconstruct Personnel Arrays from Flat Columns
     directors: [{
-      name: data["Directors Names"] || '',
-      qidOrPassport: data["QID / Passport"] || '',
-      nationality: data["Nationality"] || '',
-      dob: data["DOB"] || ''
+      name: getVal(["Directors Names"]),
+      qidOrPassport: getVal(["QID / Passport"]),
+      nationality: getVal(["Nationality"]),
+      dob: getVal(["DOB"])
     }],
     shareholders: [{
-      name: data["Significant Shareholders"] || '',
-      ownershipPercentage: parseOwnership(data["% on Ownership"]),
-      qidPassportCrNo: data["QID / Passport / CR No."] || '',
-      nationality: data["Nationality_1"] || '',
-      dobOrDoi: data["DOB/ Date of incorporation"] || ''
+      name: getVal(["Significant Shareholders"]),
+      ownershipPercentage: parseOwnership(getVal(["% on Ownership", "Ownership %"])),
+      qidPassportCrNo: getVal(["QID / Passport / CR No.", "Shareholder ID"]),
+      nationality: getVal(["Nationality_1", "Shareholder Nationality"]),
+      dobOrDoi: getVal(["DOB/ Date of incorporation"])
     }],
     ubos: [{
-      name: data["UBO Details"] || '',
-      qidOrPassport: data["QID / Passport_1"] || '',
-      nationality: data["Nationality_2"] || '',
-      dob: data["DOB_1"] || ''
+      name: getVal(["UBO Details"]),
+      qidOrPassport: getVal(["QID / Passport_1", "UBO ID"]),
+      nationality: getVal(["Nationality_2", "UBO Nationality"]),
+      dob: getVal(["DOB_1", "UBO DOB"])
     }],
     signatories: [{
-      name: data["Authorized Signatory"] || '',
-      qidOrPassport: data["QID / Passport_2"] || '',
-      nationality: data["Nationality_3"] || '',
-      dob: data["DOB_2"] || '',
-      authority: data["Authority"] || ''
+      name: getVal(["Authorized Signatory"]),
+      qidOrPassport: getVal(["QID / Passport_2", "Signatory ID"]),
+      nationality: getVal(["Nationality_3", "Signatory Nationality"]),
+      dob: getVal(["DOB_2", "Signatory DOB"]),
+      authority: getVal(["Authority"])
     }],
 
     isPep: data.is_pep || false,
@@ -150,7 +153,10 @@ export const initSupabase = (settings: AppSettings) => {
     try {
       supabase = createClient(settings.supabaseUrl, settings.supabaseKey);
       return true;
-    } catch (e) { return false; }
+    } catch (e) { 
+      console.error("Supabase init error:", e);
+      return false; 
+    }
   }
   return false;
 };
@@ -159,7 +165,7 @@ export const fetchCloudClients = async (): Promise<Client[] | null> => {
   if (!supabase) return null;
   const { data, error } = await supabase.from('clients').select('*').order('created_at', { ascending: false });
   if (error) throw error;
-  return data.map(fromSupabaseFormat);
+  return (data || []).map(fromSupabaseFormat);
 };
 
 export const addCloudClient = async (client: Client): Promise<void> => {
@@ -186,5 +192,7 @@ export const subscribeToClients = (onUpdate: () => void): RealtimeChannel | null
 };
 
 export const unsubscribeFromClients = async (channel: RealtimeChannel | null) => {
-    if (supabase && channel) await supabase.removeChannel(channel);
+    if (supabase && channel) {
+      await supabase.removeChannel(channel);
+    }
 };
