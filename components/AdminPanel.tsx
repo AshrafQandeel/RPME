@@ -42,47 +42,63 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const sqlScript = `
--- UNSanctionGuard Corporate KYC Schema v1.6
--- Run this in your Supabase SQL Editor
+-- UNSanctionGuard Corporate KYC Spreadsheet-Ready Schema v1.7
+-- Run this in your Supabase SQL Editor to support direct CSV import
 
 DROP TABLE IF EXISTS clients;
 
 CREATE TABLE clients (
   id TEXT PRIMARY KEY,
-  no TEXT,
-  status TEXT,
-  qfc_no TEXT,
-  legal_structure TEXT,
-  corporate_nationality TEXT,
-  first_name TEXT NOT NULL, -- Client Name
-  company_type TEXT,
-  services_needed TEXT,
-  engagement_year TEXT,
-  engagement_date TEXT,
-  onboarding_date TEXT,
-  incorporation_date TEXT, -- Date of QFC Incorporation or Registration
+  "No" TEXT,
+  "Status" TEXT,
+  "QFC No" TEXT,
+  "Legal Structure" TEXT,
+  "Corporate Nationality " TEXT, -- Trailing space preserved
+  "Client Name" TEXT,
+  "Services needed" TEXT,
+  "Engagement Year " TEXT, -- Trailing space preserved
+  "Engagement Date" TEXT,
+  "Onboarding Date " TEXT, -- Trailing space preserved
+  "Date of QFC Incorporation or Registration" TEXT,
+  "CR Expired date" TEXT,
+  "Entity Card No" TEXT,
+  "Entity Card Expiry" TEXT,
+  "License" TEXT,
+  "License Expiry" TEXT,
+  "Nature of Business" TEXT,
+  "Registered Address" TEXT,
+  "Telephone Number" TEXT,
+  "E Mail" TEXT,
+  "Website" TEXT,
+  "Approved Auditor" TEXT,
+  "Company Type" TEXT,
+  "Secretary" TEXT,
+  "Senior Executive Function" TEXT,
+
+  -- Flat Personnel Columns for Spreadsheet Mapping
+  "Directors Names" TEXT,
+  "QID / Passport" TEXT,
+  "Nationality" TEXT,
+  "DOB" TEXT,
+
+  "Significant Shareholders" TEXT,
+  "% on Ownership" NUMERIC,
+  "QID / Passport / CR No." TEXT,
+  "Nationality_1" TEXT,
+  "DOB/ Date of incorporation" TEXT,
+
+  "UBO Details" TEXT,
+  "QID / Passport_1" TEXT,
+  "Nationality_2" TEXT,
+  "DOB_1" TEXT,
+
+  "Authorized Signatory" TEXT,
+  "QID / Passport_2" TEXT,
+  "Nationality_3" TEXT,
+  "DOB_2" TEXT,
+  "Authority" TEXT,
   
-  cr_expiry_date TEXT, -- CR Expired date
-  entity_card_no TEXT,
-  entity_card_expiry TEXT,
-  license TEXT,
-  license_expiry TEXT,
-  approved_auditor TEXT,
-  
-  nature_of_business TEXT,
-  registered_address TEXT,
-  telephone_number TEXT,
-  email_address TEXT,
-  website TEXT,
-  
-  directors JSONB DEFAULT '[]',
-  shareholders JSONB DEFAULT '[]',
-  ubos JSONB DEFAULT '[]',
-  signatories JSONB DEFAULT '[]',
-  
-  secretary TEXT,
-  senior_executive_function TEXT,
-  
+  -- Technical Internal Fields
   is_pep BOOLEAN DEFAULT FALSE,
   type TEXT DEFAULT 'Entity',
   created_at TEXT,
@@ -131,23 +147,24 @@ CREATE POLICY "Public Access" ON clients FOR ALL USING (true) WITH CHECK (true);
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-gray-400 uppercase">Supabase URL</label>
-            <input className="w-full border border-gray-200 p-3 rounded-xl text-sm font-mono" value={localSettings.supabaseUrl || ''} onChange={e => handleChange('supabaseUrl', e.target.value)} />
+            <input className="w-full border border-gray-200 p-3 rounded-xl text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none" value={localSettings.supabaseUrl || ''} onChange={e => handleChange('supabaseUrl', e.target.value)} />
           </div>
           <div className="space-y-1">
             <label className="text-[10px] font-bold text-gray-400 uppercase">API Key</label>
-            <input className="w-full border border-gray-200 p-3 rounded-xl text-sm font-mono" type="password" value={localSettings.supabaseKey || ''} onChange={e => handleChange('supabaseKey', e.target.value)} />
+            <input className="w-full border border-gray-200 p-3 rounded-xl text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none" type="password" value={localSettings.supabaseKey || ''} onChange={e => handleChange('supabaseKey', e.target.value)} />
           </div>
         </div>
         
         <div className="bg-slate-900 rounded-2xl overflow-hidden">
            <div className="bg-slate-800 px-6 py-3 flex justify-between items-center">
-              <span className="text-slate-300 text-sm font-bold flex items-center gap-2"><Terminal size={16} /> SQL Setup Script (v1.6)</span>
+              <span className="text-slate-300 text-sm font-bold flex items-center gap-2"><Terminal size={16} /> SQL Setup Script (v1.7 - CSV Ready)</span>
               <button onClick={copySql} className="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all">
                 {copiedSql ? <Check size={14} className="text-green-400"/> : <Copy size={14}/>}
                 {copiedSql ? 'Copied!' : 'Copy SQL'}
               </button>
            </div>
            <div className="p-6">
+              <p className="text-xs text-slate-400 mb-4 italic">Note: Column names include specific spaces and characters to match your provided spreadsheet headers exactly.</p>
               <pre className="text-blue-300 text-[10px] font-mono leading-relaxed max-h-64 overflow-y-auto custom-scrollbar">
                 {sqlScript}
               </pre>
