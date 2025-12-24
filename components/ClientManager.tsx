@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
 import { Client, EntityType, RiskLevel } from '../types';
-import { Plus, Search, Filter, Trash2, Edit, RefreshCw, ShieldCheck, FileText, X, Check, Briefcase, Landmark, Globe, Mail, Phone, ExternalLink } from 'lucide-react';
+// Added AlertTriangle to the imports from lucide-react to fix missing reference error
+import { Plus, Search, Filter, Trash2, Eye, RefreshCw, ShieldCheck, FileText, X, Check, Briefcase, Landmark, Globe, Mail, Phone, ExternalLink, User, Users, Percent, Calendar, ShieldAlert, CheckCircle2, MapPin, AlertTriangle } from 'lucide-react';
 
 interface ClientManagerProps {
   clients: Client[];
@@ -12,6 +13,7 @@ interface ClientManagerProps {
 
 const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onDeleteClient, onRefresh }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -59,27 +61,6 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
     setTimeout(() => setIsRefreshing(false), 800);
   };
 
-  const handleAddEntry = (type: 'directors' | 'shareholders' | 'ubos' | 'signatories') => {
-    let fresh: any;
-    if (type === 'directors') fresh = { name: '', qidOrPassport: '', nationality: '', dob: '' };
-    if (type === 'shareholders') fresh = { name: '', ownershipPercentage: 0, qidPassportCrNo: '', nationality: '', dobOrDoi: '' };
-    if (type === 'ubos') fresh = { name: '', qidOrPassport: '', nationality: '', dob: '' };
-    if (type === 'signatories') fresh = { name: '', qidOrPassport: '', nationality: '', dob: '', authority: '' };
-    
-    setFormData(prev => ({ ...prev, [type]: [...prev[type], fresh] }));
-  };
-
-  const handleRemoveEntry = (type: 'directors' | 'shareholders' | 'ubos' | 'signatories', index: number) => {
-    if (formData[type].length <= 1) return;
-    setFormData(prev => ({ ...prev, [type]: prev[type].filter((_, i) => i !== index) }));
-  };
-
-  const handleEntryChange = (type: 'directors' | 'shareholders' | 'ubos' | 'signatories', index: number, field: string, value: any) => {
-    const updated = [...formData[type]];
-    updated[index] = { ...updated[index], [field]: value };
-    setFormData(prev => ({ ...prev, [type]: updated }));
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onAddClient(formData);
@@ -88,9 +69,9 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
 
   const getRiskBadge = (risk: RiskLevel) => {
     switch (risk) {
-      case RiskLevel.HIGH: return <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-800">High Risk</span>;
-      case RiskLevel.MEDIUM: return <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-yellow-100 text-yellow-800">Medium</span>;
-      default: return <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-800">Clean</span>;
+      case RiskLevel.HIGH: return <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-800 flex items-center gap-1"><ShieldAlert size={10}/> High Risk</span>;
+      case RiskLevel.MEDIUM: return <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-yellow-100 text-yellow-800 flex items-center gap-1"><AlertTriangle size={10}/> Medium</span>;
+      default: return <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-800 flex items-center gap-1"><CheckCircle2 size={10}/> Clean</span>;
     }
   };
 
@@ -98,6 +79,37 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
     c.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.qfcNo?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const DataRow = ({ label, value }: { label: string, value: any }) => (
+    <div className="flex flex-col gap-0.5 border-b border-gray-50 pb-2 mb-2">
+      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{label}</span>
+      <span className="text-sm font-bold text-gray-800 truncate">{value || '—'}</span>
+    </div>
+  );
+
+  const PersonnelBlock = ({ title, icon, data }: { title: string, icon: React.ReactNode, data: any[] }) => (
+    <div className="bg-gray-50/50 rounded-2xl p-6 border border-gray-100">
+      <div className="flex items-center gap-2 mb-4 text-indigo-700">
+        {icon}
+        <h4 className="font-black text-xs uppercase tracking-widest">{title}</h4>
+      </div>
+      <div className="space-y-4">
+        {data.filter(p => p.name).map((person, i) => (
+          <div key={i} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm">
+            <p className="font-bold text-gray-900 text-sm">{person.name}</p>
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <div className="text-[10px] text-gray-500">ID: <span className="font-bold text-gray-700">{person.qidOrPassport || person.qidPassportCrNo || 'N/A'}</span></div>
+              <div className="text-[10px] text-gray-500">Nat: <span className="font-bold text-gray-700">{person.nationality || 'N/A'}</span></div>
+              {person.ownershipPercentage !== undefined && (
+                <div className="text-[10px] text-gray-500">Own: <span className="font-bold text-indigo-600">{person.ownershipPercentage}%</span></div>
+              )}
+            </div>
+          </div>
+        ))}
+        {data.filter(p => p.name).length === 0 && <p className="text-xs text-gray-400 italic text-center py-2">No records disclosed</p>}
+      </div>
+    </div>
   );
 
   return (
@@ -148,7 +160,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
             {filteredClients.map((client) => (
               <tr key={client.id} className="hover:bg-indigo-50/30 transition-colors">
                 <td className="px-6 py-5">
-                  <div className="font-bold text-gray-900">{client.firstName}</div>
+                  <div className="font-bold text-gray-900 cursor-pointer hover:text-indigo-600 transition-colors" onClick={() => setSelectedClient(client)}>{client.firstName}</div>
                   <div className="text-[10px] text-gray-400 font-medium">QFC: {client.qfcNo || 'N/A'} • {client.corporateNationality}</div>
                 </td>
                 <td className="px-6 py-5 text-xs text-gray-600 font-medium">{client.engagementDate || 'N/A'}</td>
@@ -167,7 +179,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
                 <td className="px-6 py-5">{getRiskBadge(client.riskLevel)}</td>
                 <td className="px-6 py-5 text-right">
                   <div className="flex justify-end gap-2">
-                    <button className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all"><Edit size={16}/></button>
+                    <button onClick={() => setSelectedClient(client)} className="p-2 text-indigo-500 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-all" title="View Dossier"><Eye size={18}/></button>
                     <button onClick={() => onDeleteClient(client.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-white rounded-lg transition-all"><Trash2 size={16}/></button>
                   </div>
                 </td>
@@ -187,6 +199,142 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
         </table>
       </div>
 
+      {/* Client Dossier View Modal */}
+      {selectedClient && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-5xl my-auto animate-in fade-in zoom-in duration-300 overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="px-8 py-6 border-b border-gray-100 bg-slate-900 text-white flex justify-between items-center shrink-0">
+              <div className="flex items-center gap-5">
+                <div className="h-16 w-16 bg-white rounded-2xl flex items-center justify-center text-slate-900 font-black text-2xl shadow-xl">
+                  {selectedClient.firstName.charAt(0)}
+                </div>
+                <div>
+                  <h3 className="text-2xl font-black">{selectedClient.firstName}</h3>
+                  <div className="flex items-center gap-3 mt-1">
+                    <span className="text-xs font-bold text-slate-400">REF: {selectedClient.no}</span>
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+                      selectedClient.status === 'Active' ? 'bg-green-500 text-white' : 'bg-blue-500 text-white'
+                    }`}>{selectedClient.status}</span>
+                    <span className="bg-white/10 text-white text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest">{selectedClient.corporateNationality}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <div className="bg-white/10 p-4 rounded-2xl text-right">
+                  <p className="text-[9px] font-black uppercase text-slate-400 mb-1">Current Screening Status</p>
+                  {getRiskBadge(selectedClient.riskLevel)}
+                </div>
+                <button onClick={() => setSelectedClient(null)} className="p-2 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-all"><X size={28}/></button>
+              </div>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-gray-50/30">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                
+                {/* Left Column: Corporate Profile */}
+                <div className="lg:col-span-2 space-y-8">
+                  <section className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                    <h4 className="flex items-center gap-2 font-black text-sm uppercase tracking-wider text-gray-800 mb-6 border-b border-gray-50 pb-4">
+                      <Landmark size={18} className="text-indigo-600"/>
+                      Corporate Registration Details
+                    </h4>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                      <DataRow label="QFC Registration No" value={selectedClient.qfcNo} />
+                      <DataRow label="Legal Structure" value={selectedClient.legalStructure} />
+                      <DataRow label="Incorporation Date" value={selectedClient.incorporationDate} />
+                      <DataRow label="CR Expiry Date" value={selectedClient.crExpiryDate} />
+                      <DataRow label="Entity Card No" value={selectedClient.entityCardNo} />
+                      <DataRow label="License No" value={selectedClient.license} />
+                      <DataRow label="Nature of Business" value={selectedClient.natureOfBusiness} />
+                      <DataRow label="Approved Auditor" value={selectedClient.approvedAuditor} />
+                      <DataRow label="Company Type" value={selectedClient.companyType} />
+                    </div>
+                  </section>
+
+                  <section className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                    <h4 className="flex items-center gap-2 font-black text-sm uppercase tracking-wider text-gray-800 mb-6 border-b border-gray-50 pb-4">
+                      <Users size={18} className="text-indigo-600"/>
+                      Associated Personnel (KYC)
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <PersonnelBlock title="Directors" icon={<User size={14}/>} data={selectedClient.directors} />
+                      <PersonnelBlock title="Shareholders" icon={<Percent size={14}/>} data={selectedClient.shareholders} />
+                      <PersonnelBlock title="Ultimate Beneficial Owners" icon={<Users size={14}/>} data={selectedClient.ubos} />
+                      <PersonnelBlock title="Authorized Signatories" icon={<ShieldCheck size={14}/>} data={selectedClient.signatories} />
+                    </div>
+                  </section>
+                </div>
+
+                {/* Right Column: Sidebar info */}
+                <div className="space-y-8">
+                   <section className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                    <h4 className="font-black text-sm uppercase tracking-wider text-gray-800 mb-6 border-b border-gray-50 pb-4">Contact Profile</h4>
+                    <div className="space-y-4">
+                      <div className="flex gap-3 items-start">
+                        <MapPin className="text-gray-400 shrink-0" size={18}/>
+                        <div>
+                          <p className="text-[10px] font-black text-gray-400 uppercase">Registered Address</p>
+                          <p className="text-sm font-bold text-gray-700">{selectedClient.registeredAddress}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-3 items-center">
+                        <Mail className="text-gray-400 shrink-0" size={18}/>
+                        <div>
+                          <p className="text-[10px] font-black text-gray-400 uppercase">Email Address</p>
+                          <p className="text-sm font-bold text-gray-700">{selectedClient.emailAddress}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-3 items-center">
+                        <Phone className="text-gray-400 shrink-0" size={18}/>
+                        <div>
+                          <p className="text-[10px] font-black text-gray-400 uppercase">Telephone</p>
+                          <p className="text-sm font-bold text-gray-700">{selectedClient.telephoneNumber}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-3 items-center">
+                        <Globe className="text-gray-400 shrink-0" size={18}/>
+                        <div>
+                          <p className="text-[10px] font-black text-gray-400 uppercase">Website</p>
+                          <a href={selectedClient.website} target="_blank" className="text-sm font-bold text-indigo-600 hover:underline">{selectedClient.website}</a>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100">
+                    <h4 className="font-black text-sm uppercase tracking-wider text-gray-800 mb-6 border-b border-gray-50 pb-4">Document Checklist</h4>
+                    <div className="grid grid-cols-1 gap-3">
+                      {Object.entries(selectedClient.documents).map(([key, value]) => (
+                        <div key={key} className={`flex items-center justify-between p-3 rounded-xl border ${value ? 'bg-green-50 border-green-100' : 'bg-gray-50 border-gray-100'}`}>
+                          <span className="text-xs font-bold text-gray-700 uppercase">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                          {value ? <Check className="text-green-600" size={16} strokeWidth={4}/> : <X className="text-gray-300" size={16}/>}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-6 border-t border-gray-100 bg-white flex justify-between items-center shrink-0">
+               <div className="flex items-center gap-2 text-gray-400 text-xs font-bold uppercase tracking-widest">
+                  <Calendar size={14}/>
+                  Last Updated: {selectedClient.lastScreenedAt ? new Date(selectedClient.lastScreenedAt).toLocaleString() : 'Never Screened'}
+               </div>
+               <div className="flex gap-3">
+                  <button className="px-6 py-3 border border-gray-200 rounded-2xl text-gray-600 font-bold hover:bg-gray-50 transition-all flex items-center gap-2">
+                    <FileText size={18}/> Export PDF Report
+                  </button>
+                  <button onClick={() => setSelectedClient(null)} className="px-10 py-3 bg-slate-900 text-white rounded-2xl font-black hover:bg-slate-800 transition-all shadow-xl">Close Dossier</button>
+               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl max-h-[95vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-300">
@@ -202,7 +350,6 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
             </div>
             
             <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-8 space-y-12 custom-scrollbar">
-              {/* Form implementation remains the same for data integrity */}
               <section className="space-y-6">
                 <div className="flex items-center gap-3 text-indigo-700 font-black text-sm uppercase tracking-wider border-b border-indigo-50 pb-2">
                   <Briefcase size={20} />
@@ -240,8 +387,6 @@ const ClientManager: React.FC<ClientManagerProps> = ({ clients, onAddClient, onD
                   </div>
                 </div>
               </section>
-
-              {/* ... Rest of sections truncated for brevity but preserved in local logic ... */}
 
               <div className="sticky bottom-0 bg-white/95 backdrop-blur-md border-t border-gray-100 py-8 flex justify-end gap-4 mt-8">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 py-4 text-gray-500 hover:bg-gray-50 rounded-2xl font-bold transition-all">Cancel Application</button>
