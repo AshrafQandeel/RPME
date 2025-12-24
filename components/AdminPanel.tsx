@@ -42,7 +42,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const sqlScript = `
--- UNSanctionGuard Corporate KYC Spreadsheet-Ready Schema v1.7
+-- UNSanctionGuard Corporate KYC Spreadsheet-Ready Schema v1.8
 -- Run this in your Supabase SQL Editor to support direct CSV import
 
 DROP TABLE IF EXISTS clients;
@@ -82,7 +82,7 @@ CREATE TABLE clients (
   "DOB" TEXT,
 
   "Significant Shareholders" TEXT,
-  "% on Ownership" NUMERIC,
+  "% on Ownership" TEXT, -- Changed to TEXT to support "100%" imports
   "QID / Passport / CR No." TEXT,
   "Nationality_1" TEXT,
   "DOB/ Date of incorporation" TEXT,
@@ -157,14 +157,14 @@ CREATE POLICY "Public Access" ON clients FOR ALL USING (true) WITH CHECK (true);
         
         <div className="bg-slate-900 rounded-2xl overflow-hidden">
            <div className="bg-slate-800 px-6 py-3 flex justify-between items-center">
-              <span className="text-slate-300 text-sm font-bold flex items-center gap-2"><Terminal size={16} /> SQL Setup Script (v1.7 - CSV Ready)</span>
+              <span className="text-slate-300 text-sm font-bold flex items-center gap-2"><Terminal size={16} /> SQL Setup Script (v1.8 - CSV Ready)</span>
               <button onClick={copySql} className="text-xs bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg flex items-center gap-2 transition-all">
                 {copiedSql ? <Check size={14} className="text-green-400"/> : <Copy size={14}/>}
                 {copiedSql ? 'Copied!' : 'Copy SQL'}
               </button>
            </div>
            <div className="p-6">
-              <p className="text-xs text-slate-400 mb-4 italic">Note: Column names include specific spaces and characters to match your provided spreadsheet headers exactly.</p>
+              <p className="text-xs text-slate-400 mb-4 italic">Note: Ownership % is now a TEXT field to support imports with symbols like "%".</p>
               <pre className="text-blue-300 text-[10px] font-mono leading-relaxed max-h-64 overflow-y-auto custom-scrollbar">
                 {sqlScript}
               </pre>

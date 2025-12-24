@@ -41,7 +41,7 @@ const toSupabaseFormat = (client: Client) => {
     "DOB": client.directors[0]?.dob || '',
 
     "Significant Shareholders": client.shareholders[0]?.name || '',
-    "% on Ownership": client.shareholders[0]?.ownershipPercentage || 0,
+    "% on Ownership": client.shareholders[0]?.ownershipPercentage?.toString() || '0',
     "QID / Passport / CR No.": client.shareholders[0]?.qidPassportCrNo || '',
     "Nationality_1": client.shareholders[0]?.nationality || '',
     "DOB/ Date of incorporation": client.shareholders[0]?.dobOrDoi || '',
@@ -70,6 +70,14 @@ const toSupabaseFormat = (client: Client) => {
 };
 
 const fromSupabaseFormat = (data: any): Client => {
+  // Helper to parse ownership percentage which might contain a '%' sign
+  const parseOwnership = (val: any): number => {
+    if (val === null || val === undefined) return 0;
+    const strVal = val.toString().replace('%', '').trim();
+    const num = parseFloat(strVal);
+    return isNaN(num) ? 0 : num;
+  };
+
   return {
     id: data.id,
     no: data["No"] || '',
@@ -107,7 +115,7 @@ const fromSupabaseFormat = (data: any): Client => {
     }],
     shareholders: [{
       name: data["Significant Shareholders"] || '',
-      ownershipPercentage: data["% on Ownership"] || 0,
+      ownershipPercentage: parseOwnership(data["% on Ownership"]),
       qidPassportCrNo: data["QID / Passport / CR No."] || '',
       nationality: data["Nationality_1"] || '',
       dobOrDoi: data["DOB/ Date of incorporation"] || ''
