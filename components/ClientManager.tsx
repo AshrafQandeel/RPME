@@ -220,10 +220,11 @@ const ClientManager: React.FC<ClientManagerProps> = ({
   const totalPages = Math.ceil(totalCount / CLIENTS_PER_PAGE);
   const [formData, setFormData] = useState({ ...INITIAL_FORM_STATE });
 
-  const isComplianceManager = currentUserRole === UserRole.ADMIN;
-  const isReviewerOrAdmin = currentUserRole === UserRole.ADMIN || currentUserRole === UserRole.REVIEWER;
-  const isDataEntry = currentUserRole === UserRole.DATA_ENTRY;
+  const isComplianceManager = currentUserRole === UserRole.ADMIN || currentUserRole === UserRole.COMPLIANCE_MANAGER;
+  const isReviewerOrAdmin = currentUserRole === UserRole.ADMIN || currentUserRole === UserRole.COMPLIANCE_MANAGER;
+  const isDataEntry = currentUserRole === UserRole.USER;
   const isPrivileged = isComplianceManager || isDataEntry;
+  const canApproveReject = isReviewerOrAdmin;
 
   const handleStatusChange = async (status: KYCStatus) => {
     if (!selectedClient) return;
@@ -432,7 +433,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                       >
                         <Eye size={18}/>
                       </button>
-                      {isComplianceManager && (
+                      {(isComplianceManager || (isDataEntry && client.created_by === currentUserId)) && (
                         <>
                            <button 
                               onClick={(e) => { e.stopPropagation(); openEditModal(client); }}
@@ -521,7 +522,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                         <span className="px-3 py-1 bg-white/10 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-white/20">
                            {selectedClient.kyc_status}
                         </span>
-                        {isComplianceManager && (
+                        {(isComplianceManager || (isDataEntry && selectedClient.created_by === currentUserId)) && (
                           <button onClick={() => openEditModal(selectedClient)} className="flex items-center gap-2 px-3 py-1 bg-white/20 hover:bg-white/30 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] transition-all">
                              <Edit3 size={12}/> Edit Data
                           </button>
@@ -556,7 +557,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                         <p className="text-xs font-bold text-emerald-950">Provisioned: {new Date(selectedClient.created_at).toLocaleDateString()} by {selectedClient.created_by || 'System'}</p>
                      </div>
                      
-                     {isReviewerOrAdmin && (
+                     {canApproveReject && (
                         <div className="flex gap-3">
                            {selectedClient.kyc_status !== KYCStatus.REJECTED && (
                               <button onClick={() => handleStatusChange(KYCStatus.REJECTED)} className="p-4 bg-red-50 text-red-600 rounded-2xl hover:bg-red-100 transition-all border border-red-100 flex items-center gap-2">
@@ -621,7 +622,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({
 
             <div className="p-8 sm:p-10 bg-white border-t border-gray-100 flex justify-end items-center gap-6 shrink-0">
                <button onClick={() => setSelectedClient(null)} className="px-10 py-4 bg-gray-50 text-gray-400 rounded-2xl font-black text-[10px] uppercase tracking-widest">Close Dossier</button>
-               {isReviewerOrAdmin && (
+               {(isReviewerOrAdmin || (isDataEntry && selectedClient.created_by === currentUserId)) && (
                  <button 
                    onClick={handleDossierCommit}
                    disabled={isSubmitting}
