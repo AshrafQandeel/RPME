@@ -220,9 +220,10 @@ const ClientManager: React.FC<ClientManagerProps> = ({
   const totalPages = Math.ceil(totalCount / CLIENTS_PER_PAGE);
   const [formData, setFormData] = useState({ ...INITIAL_FORM_STATE });
 
-  const isComplianceManager = currentUserRole === UserRole.ADMIN || currentUserRole === UserRole.COMPLIANCE_MANAGER;
-  const isReviewerOrAdmin = currentUserRole === UserRole.ADMIN || currentUserRole === UserRole.COMPLIANCE_MANAGER;
-  const isDataEntry = currentUserRole === UserRole.USER;
+  const normalizedRole = String(currentUserRole).toLowerCase();
+  const isComplianceManager = normalizedRole === 'admin' || normalizedRole === 'compliance_manager';
+  const isReviewerOrAdmin = isComplianceManager;
+  const isDataEntry = normalizedRole === 'user';
   const isPrivileged = isComplianceManager || isDataEntry;
   const canApproveReject = isReviewerOrAdmin;
 
