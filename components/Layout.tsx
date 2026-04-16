@@ -49,10 +49,10 @@ const Layout: React.FC<LayoutProps> = ({
   }, []);
 
   const navItems: { label: string; path: string; icon: JSX.Element; roles: UserRole[]; adminOnly?: boolean }[] = [
-    { label: 'System Dashboard', path: '/', icon: <LayoutDashboard size={20} />, roles: [UserRole.ADMIN, UserRole.REVIEWER, UserRole.DATA_ENTRY, UserRole.REPORTING, UserRole.AUDITOR] },
-    { label: 'Client Onboarding', path: '/clients', icon: <Users size={20} />, roles: [UserRole.ADMIN, UserRole.REVIEWER, UserRole.DATA_ENTRY] },
-    { label: 'Sanctions Registry', path: '/sanctions', icon: <Globe size={20} />, roles: [UserRole.ADMIN, UserRole.REVIEWER, UserRole.DATA_ENTRY, UserRole.AUDITOR] },
-    { label: 'Regulatory Reports', path: '/reports', icon: <FileText size={20} />, roles: [UserRole.ADMIN, UserRole.REVIEWER, UserRole.REPORTING] },
+    { label: 'System Dashboard', path: '/', icon: <LayoutDashboard size={20} />, roles: [UserRole.ADMIN, UserRole.COMPLIANCE_MANAGER, UserRole.USER] },
+    { label: 'Client Onboarding', path: '/clients', icon: <Users size={20} />, roles: [UserRole.ADMIN, UserRole.COMPLIANCE_MANAGER, UserRole.USER] },
+    { label: 'Sanctions Registry', path: '/sanctions', icon: <Globe size={20} />, roles: [UserRole.ADMIN, UserRole.COMPLIANCE_MANAGER, UserRole.USER] },
+    { label: 'Regulatory Reports', path: '/reports', icon: <FileText size={20} />, roles: [UserRole.ADMIN, UserRole.COMPLIANCE_MANAGER, UserRole.USER] },
     { label: 'Governance', path: '/admin', icon: <Settings size={20} />, roles: [], adminOnly: true },
   ];
 

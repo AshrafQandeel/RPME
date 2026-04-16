@@ -96,7 +96,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, isCloudConnected }) => {
           // Omit virtual 'password' key to prevent Supabase schema conflicts later
           const sessionUser = { 
             ...userFound, 
-            role: userFound.role || UserRole.DATA_ENTRY
+            role: userFound.role || UserRole.USER
           };
           setTimeout(() => onLogin(sessionUser as any), 800);
         }

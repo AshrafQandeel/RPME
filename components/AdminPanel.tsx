@@ -32,7 +32,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ settings, logs: initialLogs, on
   const [pendingDeleteUser, setPendingDeleteUser] = useState<UserProfile | null>(null);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
-  const [newUserRole, setNewUserRole] = useState<UserRole>(UserRole.DATA_ENTRY);
+  const [newUserRole, setNewUserRole] = useState<UserRole>(UserRole.USER);
   const [isNewUserAdmin, setIsNewUserAdmin] = useState(false);
 
   const loadAuthoritativeData = useCallback(async () => {
@@ -143,13 +143,21 @@ ALTER TABLE "public"."audit_logs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."auth_logs" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."kyc_workflow_history" ENABLE ROW LEVEL SECURITY;
 
--- 4. Identity & Profile Access
-DROP POLICY IF EXISTS "Profiles: select own" ON "public"."profiles";
-CREATE POLICY "Profiles: select own" ON "public"."profiles" FOR SELECT TO authenticated USING (auth.uid()::text = id);
+-- 4. Identity & Profile Access (Updated for Mock Auth Compatibility)
+-- NOTE: Using 'TO anon' because the app uses a mock authentication system without Supabase Auth sessions.
+-- In a production environment with Supabase Auth, these should be changed to 'TO authenticated' and use 'auth.uid()'.
 
--- 5. Roles (Authenticated Read-Only)
-DROP POLICY IF EXISTS "Roles: authenticated read" ON "public"."roles";
-CREATE POLICY "Roles: authenticated read" ON "public"."roles" FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "Profiles: select all" ON "public"."profiles";
+CREATE POLICY "Profiles: select all" ON "public"."profiles" FOR SELECT TO anon USING (true);
+
+DROP POLICY IF EXISTS "Profiles: admin manage" ON "public"."profiles";
+CREATE POLICY "Profiles: admin manage" ON "public"."profiles" FOR ALL TO anon 
+USING (true) 
+WITH CHECK (true);
+
+-- 5. Roles (Public Read-Only)
+DROP POLICY IF EXISTS "Roles: public read" ON "public"."roles";
+CREATE POLICY "Roles: public read" ON "public"."roles" FOR SELECT TO anon USING (true);
 
 -- 6. Audit & Auth Logs (Strict Ownership Append)
 -- Removing generic "Logs: authenticated append" and replaced with table-specific owner checks
@@ -267,7 +275,7 @@ CREATE INDEX IF NOT EXISTS idx_workflow_client ON "public"."kyc_workflow_history
       password_hash_mock: DEFAULT_TEMP_PASSWORD, 
       full_name: newUserName,
       role: newUserRole,
-      is_system_admin: isNewUserAdmin, 
+      is_system_admin: isNewUserAdmin || newUserRole === UserRole.ADMIN, 
       status: AccountStatus.ACTIVE,
       must_change_password: true,
       password_expiry: new Date(Date.now() + 80 * 86400000).toISOString(),
@@ -275,8 +283,12 @@ CREATE INDEX IF NOT EXISTS idx_workflow_client ON "public"."kyc_workflow_history
     };
     try {
       await handleCloudSync(newUser);
+      alert(`Identity Provisioned: ${newUser.full_name} has been added to the registry.`);
       setNewUserEmail(''); setNewUserName(''); setIsUserModalOpen(false); setIsNewUserAdmin(false);
-    } catch (err) {}
+    } catch (err: any) {
+      console.error("[Admin] User Provisioning Failed:", err);
+      alert(`Provisioning Failed: ${err.message || 'Unknown error occurred.'}`);
+    }
   };
 
   return (
@@ -580,12 +592,21 @@ CREATE INDEX IF NOT EXISTS idx_workflow_client ON "public"."kyc_workflow_history
                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Access Role</label>
                     <select className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 text-sm font-bold outline-none" value={newUserRole} onChange={e => setNewUserRole(e.target.value as UserRole)}>
-                       <option value={UserRole.DATA_ENTRY}>Data Entry Officer</option>
-                       <option value={UserRole.REVIEWER}>Compliance Reviewer</option>
-                       <option value={UserRole.ADMIN}>Compliance Manager</option>
-                       <option value={UserRole.REPORTING}>Reporting User</option>
-                       <option value={UserRole.AUDITOR}>Audit Viewer</option>
+                       <option value={UserRole.ADMIN}>System Administrator</option>
+                       <option value={UserRole.COMPLIANCE_MANAGER}>Compliance Manager</option>
+                       <option value={UserRole.USER}>Standard User</option>
                     </select>
+                 </div>
+                 <div className="flex items-center gap-3 px-2">
+                    <input 
+                      type="checkbox" 
+                      id="isAdmin" 
+                      checked={isNewUserAdmin || newUserRole === UserRole.ADMIN} 
+                      onChange={e => setIsNewUserAdmin(e.target.checked)}
+                      disabled={newUserRole === UserRole.ADMIN}
+                      className="w-4 h-4 accent-emerald-800"
+                    />
+                    <label htmlFor="isAdmin" className="text-[10px] font-black text-slate-600 uppercase tracking-widest cursor-pointer">Grant System Admin Privileges</label>
                  </div>
                  <button type="submit" disabled={isSyncing} className="w-full py-5 bg-emerald-800 text-white rounded-2xl font-black text-[11px] uppercase tracking-widest shadow-xl hover:bg-emerald-900 transition-all flex items-center justify-center gap-3">
                     {isSyncing ? <Loader2 className="animate-spin" size={20}/> : <Shield size={20}/>}
