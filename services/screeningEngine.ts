@@ -77,40 +77,66 @@ const isHighRiskMatch = (clientName: string, sanctionedName: string): { isMatch:
 };
 
 export const screenClient = (client: Client, sanctions: SanctionEntry[]): MatchResult | null => {
-  let bestMatch: MatchResult | null = null;
-  let highestScore = 0;
-  const clientName = (client["Client Name"] || "").trim().toUpperCase();
-  if (!clientName) return null;
+  if (!sanctions.length) return null;
 
-  for (const sanction of sanctions) {
-    const sFullName = [sanction.firstName, sanction.secondName, sanction.thirdName, sanction.lastName]
-      .filter(Boolean).join(' ').trim().toUpperCase();
-    
-    // Check main name, data ID, reference number, and aliases
-    const checkNames = [
-      (sanction.referenceNumber || '').toUpperCase(), 
-      (sanction.dataId || '').toUpperCase(),
-      sFullName, 
-      ...(sanction.aliases || []).map(a => a.toUpperCase())
-    ].filter(Boolean);
-    
-    for (const sName of checkNames) {
-      const { isMatch, type } = isHighRiskMatch(clientName, sName);
-      if (isMatch) {
-        const score = Math.round(calculateSimilarity(clientName, sName) * 100);
-        if (score > highestScore) {
-          highestScore = score;
-          bestMatch = { 
-            clientId: client.id, 
-            sanctionId: sanction.dataId, 
-            score, 
-            riskLevel: RiskLevel.HIGH, 
-            matchedFields: [type], 
-            timestamp: new Date().toISOString() 
-          };
-        }
-      }
+  const clientName = (client["Client Name"] || "").trim().toUpperCase();
+  const clientNationality = (client["Company Nationality"] || '').toUpperCase();
+  
+  let bestMatch = {
+    score: 0,
+    sanction: null as SanctionEntry | null,
+    matchType: 'No Match'
+  };
+
+  for (const entry of sanctions) {
+    let currentScore = 0;
+    const entryFullName = `${entry.firstName} ${entry.secondName} ${entry.thirdName} ${entry.lastName}`.trim().toUpperCase();
+
+    // 1. Name Matching (Fuzzy/Token based)
+    const similarity = calculateSimilarity(clientName, entryFullName);
+    if (entryFullName === clientName) {
+      currentScore += 70; // Exact full name match
+    } else if (similarity >= 0.85) {
+      currentScore += 60; // Very high similarity
+    } else if (similarity >= 0.50) {
+      currentScore += 30; // Partial match
+    }
+
+    // 2. Nationality Match
+    if (clientNationality && entry.nationality.toUpperCase().includes(clientNationality)) {
+      currentScore += 20;
+    }
+
+    // 3. Entity Type Match
+    if (client.entity_type === entry.type) {
+      currentScore += 10;
+    }
+
+    if (currentScore > bestMatch.score) {
+      bestMatch = { 
+        score: currentScore, 
+        sanction: entry,
+        matchType: currentScore >= 70 ? 'High Confidence Match' : 'Probabilistic Match'
+      };
     }
   }
-  return bestMatch;
+
+  // Realistic Risk Assignment
+  let riskLevel = RiskLevel.NONE;
+  if (bestMatch.score >= 85) riskLevel = RiskLevel.HIGH;
+  else if (bestMatch.score >= 50) riskLevel = RiskLevel.MEDIUM;
+  else if (bestMatch.score >= 20) riskLevel = RiskLevel.LOW;
+
+  if (bestMatch.sanction && riskLevel !== RiskLevel.NONE) {
+    return {
+      clientId: client.id,
+      sanctionId: bestMatch.sanction.dataId,
+      score: bestMatch.score,
+      riskLevel,
+      matchedFields: [bestMatch.matchType],
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  return null;
 };
