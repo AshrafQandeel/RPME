@@ -591,10 +591,20 @@ CREATE INDEX IF NOT EXISTS idx_workflow_client ON "public"."kyc_workflow_history
                  </div>
                  <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Access Role</label>
-                    <select className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 text-sm font-bold outline-none" value={newUserRole} onChange={e => setNewUserRole(e.target.value as UserRole)}>
-                       <option value={UserRole.ADMIN}>System Administrator</option>
-                       <option value={UserRole.COMPLIANCE_MANAGER}>Compliance Manager</option>
-                       <option value={UserRole.USER}>Standard User</option>
+                    <select 
+                       className="w-full bg-slate-50 border-none rounded-2xl py-4 px-6 text-sm font-bold outline-none" 
+                       value={newUserRole} 
+                       onChange={e => {
+                          const role = e.target.value as UserRole;
+                          setNewUserRole(role);
+                          if (role === UserRole.ADMIN) {
+                             setIsNewUserAdmin(true);
+                          }
+                       }}
+                    >
+                       <option value="admin">System Administrator</option>
+                       <option value="compliance_manager">Compliance Manager</option>
+                       <option value="user">Standard User</option>
                     </select>
                  </div>
                  <div className="flex items-center gap-3 px-2">
