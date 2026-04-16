@@ -8,8 +8,7 @@ export const QATAR_NCTC_PORTAL_URL = "https://portal.moi.gov.qa/wps/portal/NCTC/
 export const OPENSANCTIONS_URL = "https://www.opensanctions.org/datasets/default/entities.json";
 export const OFAC_SDN_URL = "https://www.treasury.gov/ofac/downloads/sdn.csv";
 
-const PROXY_PRIMARY = "https://api.allorigins.win/get?url=";
-const PROXY_SECONDARY = "https://api.codetabs.com/v1/proxy?quest=";
+const LOCAL_PROXY = "/api/proxy?url=";
 
 /**
  * Generates a stable, deterministic ID for an entity when official IDs are missing.
@@ -104,28 +103,21 @@ export const parseQatarNCTCHTML = (htmlString: string, fetchDate: string = new D
 };
 
 /**
- * Handles the transport layer with multi-proxy fallback logic
+ * Handles the transport layer with server-side proxy to bypass CORS
  */
 const fetchRawContent = async (url: string): Promise<string> => {
-  const encodedUrl = encodeURIComponent(url);
   try {
-    const resp = await fetch(`${PROXY_PRIMARY}${encodedUrl}`);
-    if (!resp.ok) throw new Error(`Primary proxy fault: ${resp.status}`);
-    const json = await resp.json();
-    if (json.contents) return json.contents;
-    throw new Error("Empty payload from primary proxy");
-  } catch (err: any) {
-    console.warn("[Sanctions] Primary proxy failed, trying secondary...", err.message);
-    try {
-      const resp = await fetch(`${PROXY_SECONDARY}${encodedUrl}`);
-      if (!resp.ok) throw new Error(`Secondary proxy fault: ${resp.status}`);
-      return await resp.text();
-    } catch (err2: any) {
-      const msg = err2.message === 'Failed to fetch' 
-        ? "Failed to fetch: The proxy service is unreachable. This might be a temporary network issue or a CORS block."
-        : err2.message;
-      throw new Error(`Critical Handshake Failure: Portal at ${new URL(url).hostname} is unreachable. Error: ${msg}`);
+    const resp = await fetch(`${LOCAL_PROXY}${encodeURIComponent(url)}`);
+    if (!resp.ok) {
+      const errorData = await resp.json().catch(() => ({}));
+      throw new Error(errorData.details || `Proxy fault: ${resp.status}`);
     }
+    return await resp.text();
+  } catch (err: any) {
+    const msg = err.message === 'Failed to fetch' 
+      ? "Local proxy unreachable. Ensure the backend server is running."
+      : err.message;
+    throw new Error(`Critical Handshake Failure: Portal at ${new URL(url).hostname} is unreachable. Error: ${msg}`);
   }
 };
 
