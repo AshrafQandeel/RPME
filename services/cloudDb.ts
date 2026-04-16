@@ -108,9 +108,20 @@ export const searchSanctionsAuthoritative = async (
   }
 };
 
-export const fetchCloudClients = async (from: number, to: number): Promise<Client[]> => {
+export const fetchCloudClients = async (from: number, to: number, userRole?: string, userId?: string): Promise<Client[]> => {
   if (!supabaseClient) initSupabase();
-  const { data, error } = await supabaseClient.from('clients').select('*').order('created_at', { ascending: false }).range(from, to);
+  
+  let query = supabaseClient.from('clients').select('*');
+
+  // Compliance Managers and Admins see everything. Regular users see only their own.
+  if (userRole === 'user' && userId) {
+    query = query.eq('created_by', userId);
+  }
+
+  const { data, error } = await query
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
   if (error) throw error;
   return (data || []).map((row: any) => ({ ...row, id: row.id } as Client));
 };
@@ -419,11 +430,12 @@ export const fetchCloudUsers = async (): Promise<UserProfile[]> => {
 
 export const upsertCloudUser = async (user: any) => {
   if (!supabaseClient) initSupabase();
-  await supabaseClient.from('profiles').upsert([user], { onConflict: 'email' });
+  const { error } = await supabaseClient.from('profiles').upsert([user], { onConflict: 'email' });
+  if (error) throw error;
 };
 
 export const deleteCloudUser = async (email: string) => {
   if (!supabaseClient) initSupabase();
-  await supabaseClient.from('profiles').delete().eq('email', email);
+  const { error } = await supabaseClient.from('profiles').delete().eq('email', email);
+  if (error) throw error;
 };
-
