@@ -153,7 +153,7 @@ const App: React.FC = () => {
       const from = (page - 1) * CLIENTS_PER_PAGE;
       const to = from + CLIENTS_PER_PAGE - 1;
       const [cloudClients, count, globalRisks] = await Promise.all([
-        fetchCloudClients(from, to),
+        fetchCloudClients(from, to, currentUser?.role, currentUser?.id),
         fetchClientsTotalCount(),
         fetchGlobalRiskCounts()
       ]);

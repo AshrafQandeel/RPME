@@ -22,11 +22,9 @@ export enum KYCStatus {
 }
 
 export enum UserRole {
-  DATA_ENTRY = 'KYC Data Entry Officer',
-  REVIEWER = 'KYC Reviewer',
-  ADMIN = 'Compliance Manager',
-  REPORTING = 'Reporting User',
-  AUDITOR = 'Audit Viewer'
+  ADMIN = 'admin',
+  COMPLIANCE_MANAGER = 'compliance_manager',
+  USER = 'user'
 }
 
 export enum AccountStatus {
