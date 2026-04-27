@@ -23,16 +23,18 @@ interface DashboardProps {
 const Dashboard: React.FC<DashboardProps> = ({ clients, totalClientsCount, sanctionsCount, registryStats, isGlobalSyncing, environment, riskSummary }) => {
   const isProd = environment === SystemEnvironment.PRODUCTION;
   
-  const highRisk = riskSummary ? riskSummary[RiskLevel.HIGH] : clients.filter(c => c.riskLevel === RiskLevel.HIGH).length;
-  const mediumRisk = riskSummary ? riskSummary[RiskLevel.MEDIUM] : clients.filter(c => c.riskLevel === RiskLevel.MEDIUM).length;
-  const lowRisk = riskSummary ? riskSummary[RiskLevel.LOW] : clients.filter(c => c.riskLevel === RiskLevel.LOW).length;
-  const clean = riskSummary ? riskSummary[RiskLevel.NONE] : clients.filter(c => c.riskLevel === RiskLevel.NONE).length;
+  const highRiskTotal = riskSummary ? riskSummary[RiskLevel.HIGH] : clients.filter(c => c.riskLevel === RiskLevel.HIGH).length;
+  const mediumRiskTotal = riskSummary ? riskSummary[RiskLevel.MEDIUM] : clients.filter(c => c.riskLevel === RiskLevel.MEDIUM).length;
+  const lowRiskTotal = riskSummary ? riskSummary[RiskLevel.LOW] : clients.filter(c => c.riskLevel === RiskLevel.LOW).length;
+  const cleanProfilesTotal = riskSummary ? riskSummary[RiskLevel.NONE] : clients.filter(c => c.riskLevel === RiskLevel.NONE).length;
+  
+  const highRiskHitsSum = highRiskTotal + mediumRiskTotal + lowRiskTotal;
 
   const riskData = [
-    { name: 'High Risk', value: highRisk, color: '#EF4444' },
-    { name: 'Medium Risk', value: mediumRisk, color: '#F59E0B' },
-    { name: 'Low Risk', value: lowRisk, color: '#3B82F6' },
-    { name: 'Clear', value: clean, color: '#10B981' },
+    { name: 'High Risk', value: highRiskTotal, color: '#EF4444' },
+    { name: 'Medium Risk', value: mediumRiskTotal, color: '#F59E0B' },
+    { name: 'Low Risk', value: lowRiskTotal, color: '#3B82F6' },
+    { name: 'Clear', value: cleanProfilesTotal, color: '#10B981' },
   ];
 
   const StatCard = ({ title, value, icon, color, subValue, highlight = false }: any) => (
@@ -153,14 +155,14 @@ const Dashboard: React.FC<DashboardProps> = ({ clients, totalClientsCount, sanct
         />
         <StatCard 
           title="High Risk Hits" 
-          value={highRisk} 
+          value={highRiskHitsSum} 
           icon={<AlertTriangle />} 
           color="bg-red-500" 
           subValue="Authoritative Registry Count"
         />
         <StatCard 
           title="Clean Profiles" 
-          value={clean} 
+          value={cleanProfilesTotal} 
           icon={<CheckCircle />} 
           color="bg-emerald-500" 
           subValue="Authoritative Registry Tally"

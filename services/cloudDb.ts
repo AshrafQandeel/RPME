@@ -209,15 +209,19 @@ export const fetchGlobalRiskCounts = async (): Promise<Record<RiskLevel, number>
   };
 
   try {
-    const riskLevels = [RiskLevel.HIGH, RiskLevel.MEDIUM, RiskLevel.LOW, RiskLevel.NONE];
-    const results = await Promise.all(
-      riskLevels.map(rl => 
-        supabaseClient.from('clients').select('*', { count: 'exact', head: true }).or(`risk_level.eq.${rl},riskLevel.eq.${rl}`)
-      )
-    );
+    const { data: allRisks, error } = await supabaseClient
+      .from('clients')
+      .select('risk_level, riskLevel');
 
-    riskLevels.forEach((rl, index) => {
-      summary[rl] = results[index].count || 0;
+    if (error) throw error;
+
+    (allRisks || []).forEach((row: any) => {
+      const level = (row.risk_level || row.riskLevel || RiskLevel.NONE) as RiskLevel;
+      if (summary[level] !== undefined) {
+        summary[level]++;
+      } else {
+        summary[RiskLevel.NONE]++;
+      }
     });
     
     return summary;
