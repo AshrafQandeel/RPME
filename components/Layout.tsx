@@ -57,14 +57,21 @@ const Layout: React.FC<LayoutProps> = ({
   ];
 
   const filteredNavItems = navItems.filter(item => {
-    if (item.adminOnly) return currentUser.is_system_admin === true;
-    
     const role = String(currentUser.role || '').toLowerCase();
-    // If it's one of the first 4 items, show it to everyone for now to fix the blocker
+    const isAdmin = currentUser.is_system_admin === true || role === 'admin';
+    
+    if (item.adminOnly) return isAdmin;
+    
+    // Safety: always show core navigation to valid users
     if (item.path !== '/admin') return true;
     
     return false;
   });
+
+  useEffect(() => {
+    console.log("[Layout] User Role:", currentUser.role);
+    console.log("[Layout] Filtered Nav Items Count:", filteredNavItems.length);
+  }, [currentUser, filteredNavItems]);
 
   const BrandLogo = ({ size = "h-10" }: { size?: string }) => (
     <div className={`relative flex items-center justify-center ${size}`}>

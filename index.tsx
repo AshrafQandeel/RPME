@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { APP_VERSION } from './types';
 
+// Diagnostic logs
 const BUILD_ID = `v${APP_VERSION} (AUTHORITATIVE)`;
 const MILESTONE_DATE = "2025-10-24";
 

@@ -124,8 +124,44 @@ CREATE TABLE IF NOT EXISTS public.system_metadata (
     value JSONB
 );
 
--- 2. Schema Hardening: Ensure ownership columns exist on ALL tables
+-- 2. Schema Hardening: Ensure all required columns exist on 'clients' table
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "file_no" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "status" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "qfc_no" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "legal_structure" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "company_nationality" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "client_name" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "services_provided" JSONB;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "engagement_year" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "engagement_date" DATE;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "onboarding_date" DATE;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "qfc_incorp_date" DATE;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "cr_expiry_date" DATE;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "entity_card_no" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "entity_card_expiry" DATE;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "license" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "license_expiry" DATE;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "nature_of_business" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "registered_address" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "telephone_number" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "email" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "website" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "directors" JSONB;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "shareholders" JSONB;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "ubo_details" JSONB;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "signatories" JSONB;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "secretary" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "sef" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "auditor" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "company_type" TEXT;
 ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "created_by" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "kyc_status" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "risk_level" TEXT;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "matches" JSONB;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "match_details" JSONB;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "last_screened_at" TIMESTAMPTZ;
+ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "entity_type" TEXT;
+
 ALTER TABLE "public"."audit_logs" ADD COLUMN IF NOT EXISTS "actor_id" TEXT;
 ALTER TABLE "public"."auth_logs" ADD COLUMN IF NOT EXISTS "user_id" TEXT;
 ALTER TABLE "public"."kyc_workflow_history" ADD COLUMN IF NOT EXISTS "changed_by" TEXT;
@@ -391,12 +427,15 @@ CREATE INDEX IF NOT EXISTS idx_workflow_client ON "public"."kyc_workflow_history
                   </div>
                </div>
 
-               {securityDiscrepancies.length > 0 && (
+                {securityDiscrepancies.length > 0 && (
                   <div className="space-y-4">
                      <div className="p-6 bg-red-50 border border-red-100 rounded-2xl flex gap-4 items-start">
                         <AlertTriangle className="text-red-600 shrink-0" size={24}/>
                         <div>
                            <p className="text-[11px] font-black uppercase text-red-900 tracking-wider">Critical Integrity Faults</p>
+                           <p className="text-[10px] text-red-800 font-bold uppercase mt-1 leading-relaxed">
+                             Structure mismatch detected. To fix this, copy the script below and run it in your Supabase SQL Editor.
+                           </p>
                            <ul className="mt-3 space-y-2">
                               {securityDiscrepancies.map((d, i) => (
                                  <li key={i} className="text-[10px] font-bold text-red-700 flex items-center gap-2">
@@ -404,6 +443,13 @@ CREATE INDEX IF NOT EXISTS idx_workflow_client ON "public"."kyc_workflow_history
                                  </li>
                               ))}
                            </ul>
+                           <button 
+                             onClick={copyToClipboard}
+                             className="mt-4 flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-red-200 hover:bg-red-700 transition-all"
+                           >
+                              {isCopying ? <Check size={14} /> : <DatabaseZap size={14} />}
+                              Copy Migration Script
+                           </button>
                         </div>
                      </div>
                   </div>
@@ -599,6 +645,8 @@ CREATE INDEX IF NOT EXISTS idx_workflow_client ON "public"."kyc_workflow_history
                           setNewUserRole(role);
                           if (role === UserRole.ADMIN) {
                              setIsNewUserAdmin(true);
+                          } else {
+                             setIsNewUserAdmin(false);
                           }
                        }}
                     >

@@ -71,7 +71,7 @@ if (!isVercel && !isProduction) {
 }
 
 // SPA fallback
-app.get('*', (req, res) => {
+app.get('*all', (req, res) => {
   // If it's an API route that wasn't caught, don't serve index.html
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'API route not found' });

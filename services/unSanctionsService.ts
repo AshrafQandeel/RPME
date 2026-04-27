@@ -15,7 +15,15 @@ const LOCAL_PROXY = "/api/proxy?url=";
  * Prevents duplicates by creating a fingerprint of the identity.
  */
 const generateDeterministicId = (prefix: string, name: string, nationality: string, ref: string): string => {
-  if (ref && ref.length > 2) return `${prefix}-${ref.replace(/[^a-zA-Z0-9]/g, '')}`;
+  const isPlaceholder = (s: string) => {
+    const low = (s || '').toLowerCase().trim();
+    return low === '' || low === 'n/a' || low === 'none' || low === 'unknown' || low === 'null' || low === 'undefined' || low === '-' || low === '.';
+  };
+
+  if (ref && ref.length > 2 && !isPlaceholder(ref)) {
+    return `${prefix}-${ref.replace(/[^a-zA-Z0-9]/g, '')}`;
+  }
+  
   // Fallback: Hash the name and nationality
   const fingerprint = `${name}|${nationality}`.toUpperCase().replace(/\s+/g, '');
   let hash = 0;
@@ -235,28 +243,56 @@ export const parseExcelToSanctions = (buffer: ArrayBuffer, sourceName: string): 
   const workbook = XLSX.read(buffer, { type: 'array' });
   const sheetName = workbook.SheetNames[0];
   const worksheet = workbook.Sheets[sheetName];
-  return XLSX.utils.sheet_to_json(worksheet);
+  
+  // Find the header row dynamically
+  const jsonRaw: any[][] = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+  let headerRowIndex = 0;
+  
+  // Scrutinize the first 20 rows for likely headers
+  for (let i = 0; i < Math.min(jsonRaw.length, 20); i++) {
+    const row = jsonRaw[i];
+    const rowText = row.join(' ').toLowerCase();
+    if (rowText.includes('registration number') || 
+        rowText.includes('permanent reference') || 
+        rowText.includes('last name') ||
+        (rowText.includes('name') && rowText.includes('nationality'))) {
+      headerRowIndex = i;
+      break;
+    }
+  }
+  
+  return XLSX.utils.sheet_to_json(worksheet, { range: headerRowIndex });
 };
 
 export const mapFieldsToSanction = (row: any, mapping: Record<string, string>, source: string): SanctionEntry => {
   const getVal = (key: string) => {
     const mappedKey = mapping[key];
-    return mappedKey ? String(row[mappedKey] || '') : '';
+    if (!mappedKey) return '';
+    // Handle cases where the actual key in data might have extra spaces from Excel
+    const actualKey = Object.keys(row).find(k => k.trim() === mappedKey.trim()) || mappedKey;
+    return String(row[actualKey] || '').trim();
   };
-  const typeStr = getVal('type').toUpperCase();
-  const entityType = (typeStr.includes('CORP') || typeStr.includes('ENTITY') || typeStr.includes('CORPORATE')) ? EntityType.CORPORATE : EntityType.INDIVIDUAL;
-  const name = getVal('firstName') + ' ' + getVal('lastName');
+
+  const typeRaw = getVal('type').toUpperCase();
+  const entityType = (typeRaw.includes('CORP') || typeRaw.includes('ENTITY') || typeRaw.includes('CORPORATE')) 
+    ? EntityType.CORPORATE 
+    : EntityType.INDIVIDUAL;
+
+  const firstName = getVal('firstName') || 'UNKNOWN';
+  const lastName = getVal('lastName') || '';
+  const nationality = getVal('nationality') || 'UNKNOWN';
+  const refNo = getVal('referenceNumber') || 'MANUAL-REF';
 
   return {
-    dataId: generateDeterministicId('MANUAL', name, getVal('nationality'), getVal('referenceNumber')),
+    dataId: generateDeterministicId('MANUAL', `${firstName} ${lastName}`, nationality, getVal('dataId') || refNo),
     source: source,
-    firstName: getVal('firstName') || 'UNKNOWN',
-    lastName: getVal('lastName'),
+    firstName,
+    lastName,
     unListType: 'Manual Import',
-    referenceNumber: getVal('referenceNumber'),
+    referenceNumber: refNo,
     listedOn: new Date().toISOString().split('T')[0],
-    comments: getVal('comments'),
-    nationality: getVal('nationality'),
+    comments: getVal('comments') || 'Manually ingested via alignment protocol.',
+    nationality,
     aliases: [],
     type: entityType,
     fetchDate: new Date().toISOString()

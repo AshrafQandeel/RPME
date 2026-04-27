@@ -81,6 +81,7 @@ export const screenClient = (client: Client, sanctions: SanctionEntry[]): MatchR
 
   const clientName = (client["Client Name"] || "").trim().toUpperCase();
   const clientNationality = (client["Company Nationality"] || '').toUpperCase();
+  const cTokens = clientName.split(/\s+/).filter(t => t.length > 1 && !CORPORATE_NOISE.includes(t));
   
   let bestMatch = {
     score: 0,
@@ -91,40 +92,82 @@ export const screenClient = (client: Client, sanctions: SanctionEntry[]): MatchR
   for (const entry of sanctions) {
     let currentScore = 0;
     const entryFullName = `${entry.firstName} ${entry.secondName} ${entry.thirdName} ${entry.lastName}`.trim().toUpperCase();
+    const sTokens = entryFullName.split(/\s+/).filter(t => t.length > 1 && !CORPORATE_NOISE.includes(t));
 
-    // 1. Name Matching (Fuzzy/Token based)
+    // 1. Direct similarity check
     const similarity = calculateSimilarity(clientName, entryFullName);
-    if (entryFullName === clientName) {
-      currentScore += 70; // Exact full name match
+    
+    // 2. Token Consensus Check (More robust for multi-part names)
+    let matchedTokens = 0;
+    for (const ct of cTokens) {
+      // Threshold 0.70 allows more significant typos (e.g., JAMeL vs JAMAL, ZEINIeE vs ZEINIYE)
+      if (sTokens.some(st => st === ct || calculateSimilarity(ct, st) >= 0.70)) {
+        matchedTokens++;
+      }
+    }
+
+    const tokenRatio = cTokens.length > 0 ? matchedTokens / cTokens.length : 0;
+    const sanctionTokenRatio = sTokens.length > 0 ? matchedTokens / sTokens.length : 0;
+
+    // SCORING LOGIC v24.0 - Aggressive for Typos & Partial Names
+    if (clientName === entryFullName) {
+      currentScore = 98; 
+    } else if (tokenRatio >= 0.90 && sanctionTokenRatio >= 0.80) {
+      currentScore = 95; // High consensus
     } else if (similarity >= 0.85) {
-      currentScore += 60; // Very high similarity
-    } else if (similarity >= 0.50) {
-      currentScore += 30; // Partial match
+      currentScore = 90; // Strong fuzzy match
+    } else if (tokenRatio >= 0.80 && matchedTokens >= 2) {
+      currentScore = 85; // Most user tokens match (Catch typos like JAMeL ZEINIeE)
+    } else if (tokenRatio >= 0.60 && sanctionTokenRatio >= 0.50) {
+      currentScore = 75; // Significant overlap (at least half of sanction record)
+    } else if (tokenRatio >= 0.5 || similarity >= 0.5) {
+      currentScore = 60; // Moderate risk
+    } else if (matchedTokens >= 2) {
+      currentScore = 50; // Multiple name parts matched fuzzy
+    } else if (matchedTokens >= 1 && (cTokens.length <= 1)) {
+      currentScore = 40; // Single token match but it's the only one provided
+    } else if (matchedTokens >= 1 && (sTokens.length <= 2)) {
+      currentScore = 30; // Weak but present
     }
 
-    // 2. Nationality Match
-    if (clientNationality && entry.nationality.toUpperCase().includes(clientNationality)) {
-      currentScore += 20;
+    // 3. Alias Check
+    if (currentScore < 80 && entry.aliases && entry.aliases.length > 0) {
+      for (const alias of entry.aliases) {
+        const aSimilarity = calculateSimilarity(clientName, alias.toUpperCase());
+        if (aSimilarity >= 0.90) {
+          currentScore = Math.max(currentScore, 85);
+          break;
+        }
+      }
     }
 
-    // 3. Entity Type Match
-    if (client.entity_type === entry.type) {
-      currentScore += 10;
+    // 4. Identity Multipliers
+    if (currentScore >= 30) {
+      // Nationality match adds confidence
+      if (clientNationality && entry.nationality.toUpperCase().includes(clientNationality)) {
+        currentScore += 10;
+      }
+      
+      // Entity Type match adds confidence
+      if (client.entity_type === entry.type) {
+        currentScore += 5;
+      }
     }
 
     if (currentScore > bestMatch.score) {
       bestMatch = { 
-        score: currentScore, 
+        score: Math.min(currentScore, 100), 
         sanction: entry,
-        matchType: currentScore >= 70 ? 'High Confidence Match' : 'Probabilistic Match'
+        matchType: currentScore >= 80 ? 'High Confidence Match' : 
+                   currentScore >= 50 ? 'Probabilistic Match' : 'Possible Match'
       };
     }
   }
 
   // Realistic Risk Assignment
   let riskLevel = RiskLevel.NONE;
-  if (bestMatch.score >= 85) riskLevel = RiskLevel.HIGH;
-  else if (bestMatch.score >= 50) riskLevel = RiskLevel.MEDIUM;
+  if (bestMatch.score >= 75) riskLevel = RiskLevel.HIGH;
+  else if (bestMatch.score >= 45) riskLevel = RiskLevel.MEDIUM;
   else if (bestMatch.score >= 20) riskLevel = RiskLevel.LOW;
 
   if (bestMatch.sanction && riskLevel !== RiskLevel.NONE) {
@@ -134,6 +177,7 @@ export const screenClient = (client: Client, sanctions: SanctionEntry[]): MatchR
       score: bestMatch.score,
       riskLevel,
       matchedFields: [bestMatch.matchType],
+      matchedRecord: bestMatch.sanction,
       timestamp: new Date().toISOString()
     };
   }

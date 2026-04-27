@@ -1,6 +1,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { Client, RiskLevel, UserProfile, SanctionEntry, EntityType, IngestionLog, SystemLog, KYCStatus, SystemEnvironment } from '../types';
+import { screenClient } from './screeningEngine';
 
 const MASTER_REGISTRY_URL = 'https://wbjiokaryxrjicavcvwx.supabase.co';
 const MASTER_REGISTRY_KEY = 'sb_publishable_Folrp4epgSCgQArvm2GAfQ_Nbo-xJ-m';
@@ -25,7 +26,8 @@ export const initSupabase = () => {
   if (supabaseClient) return true;
   try {
     supabaseClient = createClient(MASTER_REGISTRY_URL, MASTER_REGISTRY_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: { fetch: (...args) => fetch(...args) }
     });
     return true;
   } catch (e) {
@@ -67,16 +69,16 @@ export const searchSanctionsAuthoritative = async (
       .from('sanctions')
       .select('*', { count: 'exact' })
       .range(from, to)
-      .order('first_name', { ascending: true });
+      .order('fetch_date', { ascending: false });
     return { data: (data || []).map(mapRowToEntry), count: count || 0 };
   }
 
   try {
     const tokens = cleanName.split(/\s+/)
       .filter(t => t.length >= 2 && !RETRIEVAL_NOISE.includes(t))
-      .slice(0, 3); 
+      .slice(0, 5); 
 
-    const cols = ['first_name', 'last_name', 'comments', 'data_id', 'reference_number'];
+    const cols = ['first_name', 'second_name', 'third_name', 'last_name', 'comments', 'data_id', 'reference_number'];
     const filterParts: string[] = [];
 
     if (tokens.length === 0) {
@@ -86,6 +88,12 @@ export const searchSanctionsAuthoritative = async (
       tokens.forEach(t => {
         const term = `%${t}%`;
         cols.forEach(col => filterParts.push(`${col}.ilike.${term}`));
+        
+        // Retrieval expansion for typos: search by short prefixes
+        if (t.length >= 3) {
+          const prefix = t.substring(0, Math.min(t.length - 1, 4));
+          cols.forEach(col => filterParts.push(`${col}.ilike.%${prefix}%`));
+        }
       });
     }
 
@@ -94,7 +102,7 @@ export const searchSanctionsAuthoritative = async (
       .select('*', { count: 'exact' })
       .or(filterParts.join(','))
       .range(from, to)
-      .order('first_name', { ascending: true });
+      .order('fetch_date', { ascending: false });
 
     if (error) throw new Error(`REGISTRY_QUERY_FAULT: ${extractError(error)}`);
 
@@ -123,7 +131,47 @@ export const fetchCloudClients = async (from: number, to: number, userRole?: str
     .range(from, to);
 
   if (error) throw error;
-  return (data || []).map((row: any) => ({ ...row, id: row.id } as Client));
+  
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    "No": row.file_no || row.no || '',
+    "Status": row.status || 'Active',
+    "QFC No": row.qfc_no || '',
+    "Legal Structure": row.legal_structure || '',
+    "Company Nationality": row.company_nationality || '',
+    "Client Name": row.client_name || '',
+    "Services Provided": row.services_provided || [],
+    "Engagement Year": row.engagement_year || '',
+    "Engagement Date": row.engagement_date || '',
+    "Onboarding Date": row.onboarding_date || '',
+    "Date of QFC Incorporation or Registration": row.qfc_incorp_date || row.incorporation_date || '',
+    "CR Expired date": row.cr_expiry_date || '',
+    "Entity Card No": row.entity_card_no || '',
+    "Entity Card Expiry": row.entity_card_expiry || '',
+    "License": row.license || '',
+    "License Expiry": row.license_expiry || '',
+    "Nature of Business": row.nature_of_business || '',
+    "Registered Address": row.registered_address || '',
+    "Telephone Number": row.telephone_number || '',
+    "E Mail": row.email || '',
+    "Website": row.website || '',
+    "Directors Names": row.directors || row.directors_names || [],
+    "Significant Shareholders": row.shareholders || [],
+    "UBO Details": row.ubo_details || row.ubos || [],
+    "Authorized Signatory": row.signatories || [],
+    "Secretary": row.secretary || '',
+    "Senior Executive Function": row.sef || row.senior_executive_function || '',
+    "Approved Auditor": row.auditor || row.approved_auditor || '',
+    "Company Type": row.company_type || '',
+    created_at: row.created_at,
+    created_by: row.created_by,
+    kyc_status: row.kyc_status as KYCStatus,
+    riskLevel: row.risk_level as RiskLevel || row.riskLevel as RiskLevel,
+    matches: row.matches || [],
+    match_details: row.match_details || null,
+    lastScreenedAt: row.last_screened_at || row.lastScreenedAt,
+    entity_type: row.entity_type as EntityType
+  } as Client));
 };
 
 export const fetchClientsTotalCount = async (): Promise<number> => {
@@ -145,7 +193,7 @@ export const fetchGlobalRiskCounts = async (): Promise<Record<RiskLevel, number>
     const riskLevels = [RiskLevel.HIGH, RiskLevel.MEDIUM, RiskLevel.LOW, RiskLevel.NONE];
     const results = await Promise.all(
       riskLevels.map(rl => 
-        supabaseClient.from('clients').select('*', { count: 'exact', head: true }).eq('riskLevel', rl)
+        supabaseClient.from('clients').select('*', { count: 'exact', head: true }).or(`risk_level.eq.${rl},riskLevel.eq.${rl}`)
       )
     );
 
@@ -162,8 +210,54 @@ export const fetchGlobalRiskCounts = async (): Promise<Record<RiskLevel, number>
 
 export const upsertCloudClient = async (client: Client) => {
   if (!supabaseClient) initSupabase();
-  const { error } = await supabaseClient.from('clients').upsert([client], { onConflict: 'id' });
-  if (error) throw new Error(extractError(error));
+  
+  // Mapping to snake_case schema for database persistence
+  const dbRecord: any = {
+    id: client.id,
+    file_no: client["No"],
+    status: client["Status"],
+    qfc_no: client["QFC No"],
+    legal_structure: client["Legal Structure"],
+    company_nationality: client["Company Nationality"],
+    client_name: client["Client Name"],
+    services_provided: client["Services Provided"],
+    engagement_year: client["Engagement Year"],
+    engagement_date: client["Engagement Date"] || null,
+    onboarding_date: client["Onboarding Date"] || null,
+    qfc_incorp_date: client["Date of QFC Incorporation or Registration"] || null,
+    cr_expiry_date: client["CR Expired date"] || null,
+    entity_card_no: client["Entity Card No"],
+    entity_card_expiry: client["Entity Card Expiry"] || null,
+    license: client["License"],
+    license_expiry: client["License Expiry"] || null,
+    nature_of_business: client["Nature of Business"],
+    registered_address: client["Registered Address"],
+    telephone_number: client["Telephone Number"],
+    email: client["E Mail"],
+    website: client["Website"],
+    directors: client["Directors Names"],
+    shareholders: client["Significant Shareholders"],
+    ubo_details: client["UBO Details"],
+    signatories: client["Authorized Signatory"],
+    secretary: client["Secretary"],
+    sef: client["Senior Executive Function"],
+    auditor: client["Approved Auditor"],
+    company_type: client["Company Type"],
+    created_at: client.created_at || new Date().toISOString(),
+    created_by: client.created_by,
+    kyc_status: client.kyc_status,
+    risk_level: client.riskLevel,
+    matches: client.matches,
+    match_details: client.match_details,
+    last_screened_at: client.lastScreenedAt,
+    entity_type: client.entity_type
+  };
+
+  const { error } = await supabaseClient.from('clients').upsert([dbRecord], { onConflict: 'id' });
+  if (error) {
+    console.error("[CloudDB] Upsert Failed:", error);
+    throw new Error(extractError(error));
+  }
 };
 
 export const deleteCloudClient = async (id: string) => {
@@ -221,6 +315,45 @@ export const deleteStaleSanctions = async (source: string, latestTimestamp: stri
     .lt('fetch_date', latestTimestamp);
   
   if (error) console.error(`[Purge] Failed to remove stale identities from ${source}:`, error);
+};
+
+/**
+ * Advanced de-duplication: Removes records with identical names and nationalities
+ * across all sources, keeping ONLY the most recently fetched one.
+ */
+export const deduplicateDatabase = async (): Promise<number> => {
+  if (!supabaseClient) initSupabase();
+  try {
+    const { data, error } = await supabaseClient
+      .from('sanctions')
+      .select('data_id, first_name, last_name, nationality, fetch_date')
+      .order('fetch_date', { ascending: false });
+
+    if (error || !data) return 0;
+
+    const seen = new Map<string, string>(); 
+    const toDelete: string[] = [];
+
+    data.forEach((row: any) => {
+      const fingerprint = `${row.first_name}|${row.last_name}|${row.nationality}`.toUpperCase().replace(/\s+/g, '');
+      if (seen.has(fingerprint)) {
+        toDelete.push(row.data_id);
+      } else {
+        seen.set(fingerprint, row.data_id);
+      }
+    });
+
+    if (toDelete.length > 0) {
+      for (let i = 0; i < toDelete.length; i += 100) {
+        const chunk = toDelete.slice(i, i + 100);
+        await supabaseClient.from('sanctions').delete().in('data_id', chunk);
+      }
+    }
+    return toDelete.length;
+  } catch (e) {
+    console.error("[Deduplicator] Execution Fault:", e);
+    return 0;
+  }
 };
 
 export const logIngestionEvent = async (log: any) => {
@@ -338,13 +471,30 @@ export const validateRegistrySchemaV431 = async () => {
   if (!supabaseClient) initSupabase();
   const discrepancies: string[] = [];
   
-  // Verify basic table accessibility for standard operations
+  // Verify basic table accessibility
   const { error: clientErr } = await supabaseClient.from('clients').select('id').limit(1);
   if (clientErr && clientErr.code === '42P01') {
     discrepancies.push("Registry Critical: Table 'clients' is missing from cloud schema.");
   }
 
-  // Check profiles table which is critical for identity management
+  // Check for critical columns in clients table
+  const criticalColumns = [
+    'directors', 'shareholders', 'ubo_details', 'signatories', 
+    'file_no', 'qfc_no', 'kyc_status', 'risk_level', 'last_screened_at'
+  ];
+  
+  // Test for columns by attempting a minimal select
+  const { error: colCheckErr } = await supabaseClient.from('clients').select(criticalColumns.join(',')).limit(0);
+  if (colCheckErr && colCheckErr.code === 'PGRST204') {
+    const missingMatch = colCheckErr.message.match(/Could not find the '(.+?)' column/);
+    if (missingMatch) {
+      discrepancies.push(`Registry Fault: Missing column '${missingMatch[1]}' in table 'clients'. Run the hardening script in the Admin Panel.`);
+    } else {
+      discrepancies.push("Registry Fault: One or more required columns are missing in the 'clients' table.");
+    }
+  }
+
+  // Check profiles table
   const { error: profileErr } = await supabaseClient.from('profiles').select('id').limit(1);
   if (profileErr && profileErr.code === '42P01') {
     discrepancies.push("Registry Critical: Table 'profiles' is missing from cloud schema.");
@@ -411,13 +561,13 @@ export const subscribeToGlobalEnvironment = (callback: (env: SystemEnvironment) 
 };
 
 export const screenEntityAgainstDb = async (client: Client, triggeredBy?: string): Promise<Client> => {
-  const { screenClient } = await import('./screeningEngine');
   const response = await searchSanctionsAuthoritative(client["Client Name"], 0, 150);
   const match = screenClient(client, response.data);
   return { 
     ...client, 
     riskLevel: match ? match.riskLevel : RiskLevel.NONE, 
     matches: match ? [match.sanctionId] : [], 
+    match_details: match,
     lastScreenedAt: new Date().toISOString() 
   };
 };

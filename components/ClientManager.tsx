@@ -211,6 +211,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [pendingDeleteClient, setPendingDeleteClient] = useState<Client | null>(null);
@@ -267,6 +268,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
+    setSubmissionError(null);
 
     const errors: string[] = [];
     if (!formData["Client Name"]) errors.push("Client Name");
@@ -296,9 +298,11 @@ const ClientManager: React.FC<ClientManagerProps> = ({
       
       setFormData({ ...INITIAL_FORM_STATE });
       setFormErrors([]);
+      setSubmissionError(null);
       setIsModalOpen(false);
     } catch (err: any) { 
-      alert(`Operation Failure: ${err.message}`); 
+      console.error("[Persistence Error]", err);
+      setSubmissionError(err.message || "Conflict or communication error during record provisioning.");
     } finally { 
       setIsSubmitting(false); 
     }
@@ -407,6 +411,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-[8px] font-black uppercase border ${
                          client.kyc_status === KYCStatus.APPROVED ? 'bg-emerald-50 text-emerald-700 border-emerald-100' :
                          client.kyc_status === KYCStatus.PENDING_REVIEW ? 'bg-amber-50 text-amber-700 border-amber-100' :
+                         client.kyc_status === KYCStatus.UNDER_INVESTIGATION ? 'bg-orange-50 text-orange-700 border-orange-100' :
                          client.kyc_status === KYCStatus.REJECTED ? 'bg-red-50 text-red-600 border-red-100' :
                          'bg-slate-50 text-slate-400 border-slate-200'
                        }`}>
@@ -538,13 +543,125 @@ const ClientManager: React.FC<ClientManagerProps> = ({
             </div>
 
             <div className="flex-1 overflow-y-auto p-8 sm:p-12 space-y-12 custom-scrollbar bg-gray-50/30">
+               
+               {/* ENHANCED SCREENING RESULT SECTION */}
+               {selectedClient.match_details && (
+                  <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+                     <div className="bg-slate-50 p-6 border-b border-gray-100 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                           <div className="p-2 bg-emerald-900 text-white rounded-lg">
+                              <ScanSearch size={18} />
+                           </div>
+                           <h3 className="text-xs font-black uppercase tracking-widest text-slate-800">Screening Result</h3>
+                        </div>
+                        <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase border ${
+                           selectedClient.riskLevel === RiskLevel.HIGH ? 'bg-red-500 text-white border-red-600 shadow-lg shadow-red-200' :
+                           selectedClient.riskLevel === RiskLevel.MEDIUM ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                           'bg-emerald-100 text-emerald-700 border-emerald-200'
+                        }`}>
+                           {selectedClient.riskLevel} Similarity Detected
+                        </span>
+                     </div>
+                     
+                     <div className="p-8 space-y-8">
+                        <div className="flex flex-col md:flex-row items-center gap-8 bg-gray-50/50 p-8 rounded-[2rem]">
+                           <div className="shrink-0 relative">
+                              <svg className="w-32 h-32 transform -rotate-90">
+                                 <circle cx="64" cy="64" r="58" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-gray-200" />
+                                 <circle 
+                                    cx="64" cy="64" r="58" stroke="currentColor" strokeWidth="12" fill="transparent" 
+                                    strokeDasharray={Math.PI * 2 * 58}
+                                    strokeDashoffset={Math.PI * 2 * 58 * (1 - (selectedClient.match_details.score / 100))}
+                                    className={`transition-all duration-1000 ${
+                                       selectedClient.match_details.score > 75 ? 'text-red-500' : 
+                                       selectedClient.match_details.score > 40 ? 'text-amber-500' : 'text-emerald-500'
+                                    }`}
+                                 />
+                              </svg>
+                              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                 <span className="text-2xl font-black text-slate-900">{selectedClient.match_details.score}%</span>
+                                 <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Similarity</span>
+                              </div>
+                           </div>
+                           
+                           <div className="flex-1 space-y-4">
+                              <div className="flex items-center gap-3">
+                                 <AlertTriangle size={20} className={selectedClient.match_details.score > 50 ? 'text-red-500' : 'text-amber-500'} />
+                                 <h4 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                                    {selectedClient.match_details.score > 80 ? 'Authoritative Match Confirmed' : 
+                                     selectedClient.match_details.score > 40 ? 'Potential Identity Conflict' : 'Low Relevance Match'}
+                                 </h4>
+                              </div>
+                              <p className="text-[10px] font-bold text-slate-500 leading-relaxed uppercase">
+                                 System has identified a correlation with a record in the global sanctions registry. 
+                                 Primary reason: <span className="text-slate-900 font-black">{selectedClient.match_details.matchedFields.join(', ')}</span>.
+                              </p>
+                           </div>
+                        </div>
+
+                        {selectedClient.match_details.matchedRecord && (
+                           <div className="border-t border-gray-100 pt-8 mt-8">
+                              <h5 className="text-[9px] font-black text-gray-400 uppercase tracking-[0.3em] mb-4">Matched Registry Identity</h5>
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                 <div className="p-5 bg-white border border-gray-100 rounded-2xl">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">FullName (Registry)</p>
+                                    <p className="text-xs font-black text-slate-900">
+                                       {selectedClient.match_details.matchedRecord.firstName} {selectedClient.match_details.matchedRecord.lastName}
+                                    </p>
+                                 </div>
+                                 <div className="p-5 bg-white border border-gray-100 rounded-2xl">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Source / Registry</p>
+                                    <p className="text-xs font-black text-slate-900">{selectedClient.match_details.matchedRecord.source}</p>
+                                 </div>
+                                 <div className="p-5 bg-white border border-gray-100 rounded-2xl">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Nationality / DOB</p>
+                                    <p className="text-xs font-black text-slate-900">
+                                       {selectedClient.match_details.matchedRecord.nationality} • {selectedClient.match_details.matchedRecord.dateOfBirth || 'N/A'}
+                                    </p>
+                                 </div>
+                                 <div className="p-5 bg-white border border-gray-100 rounded-2xl">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Registry Reference</p>
+                                    <p className="text-xs font-black text-slate-900">{selectedClient.match_details.matchedRecord.referenceNumber || 'N/A'}</p>
+                                 </div>
+                                 <div className="p-5 bg-white border border-gray-100 rounded-2xl">
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">List Type</p>
+                                    <p className="text-xs font-black text-slate-900">{selectedClient.match_details.matchedRecord.unListType || 'UN Consolidated'}</p>
+                                 </div>
+                              </div>
+                              <div className="mt-3 p-5 bg-red-50/30 border border-red-50 rounded-2xl">
+                                 <p className="text-[8px] font-black text-red-400 uppercase tracking-widest mb-1">Registry Comments & Aliases</p>
+                                 <p className="text-[10px] font-bold text-red-900 leading-relaxed mb-3">
+                                    {selectedClient.match_details.matchedRecord.comments || 'No specific entity markers provided in registry.'}
+                                 </p>
+                                 {selectedClient.match_details.matchedRecord.aliases && selectedClient.match_details.matchedRecord.aliases.length > 0 && (
+                                    <div className="flex flex-wrap gap-2 pt-3 border-t border-red-100">
+                                       {selectedClient.match_details.matchedRecord.aliases.map((alias, i) => (
+                                          <span key={i} className="px-2 py-0.5 bg-red-100/50 text-red-700 rounded text-[8px] font-black uppercase tracking-wider">{alias}</span>
+                                       ))}
+                                    </div>
+                                 )}
+                              </div>
+                           </div>
+                        )}
+                     </div>
+                  </div>
+               )}
+
                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className={`p-8 rounded-[2rem] border shadow-sm ${selectedClient.riskLevel === RiskLevel.HIGH ? 'bg-red-50 border-red-100' : 'bg-emerald-50 border-emerald-100'}`}>
+                  <div className={`p-8 rounded-[2rem] border shadow-sm ${
+                    selectedClient.riskLevel === RiskLevel.HIGH ? 'bg-red-50 border-red-100' : 
+                    selectedClient.kyc_status === KYCStatus.UNDER_INVESTIGATION ? 'bg-orange-50 border-orange-100' :
+                    'bg-emerald-50 border-emerald-100'
+                  }`}>
                      <div className="flex items-center gap-3 mb-4">
-                        <Shield className={selectedClient.riskLevel === RiskLevel.HIGH ? 'text-red-600' : 'text-emerald-600'} size={24}/>
+                        <Shield className={selectedClient.riskLevel === RiskLevel.HIGH ? 'text-red-600' : (selectedClient.kyc_status === KYCStatus.UNDER_INVESTIGATION ? 'text-orange-600' : 'text-emerald-600')} size={24}/>
                         <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-500">Compliance Status</h4>
                      </div>
-                     <p className={`text-2xl font-black uppercase ${selectedClient.riskLevel === RiskLevel.HIGH ? 'text-red-900' : 'text-emerald-900'}`}>
+                     <p className={`text-2xl font-black uppercase ${
+                        selectedClient.riskLevel === RiskLevel.HIGH ? 'text-red-900' : 
+                        selectedClient.kyc_status === KYCStatus.UNDER_INVESTIGATION ? 'text-orange-900' :
+                        'text-emerald-900'
+                     }`}>
                         {selectedClient.riskLevel === RiskLevel.HIGH ? 'HIGH RISK' : selectedClient.kyc_status}
                      </p>
                   </div>
@@ -559,15 +676,20 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                      </div>
                      
                      {canApproveReject && (
-                        <div className="flex gap-3">
+                        <div className="flex gap-2">
                            {selectedClient.kyc_status !== KYCStatus.REJECTED && (
-                              <button onClick={() => handleStatusChange(KYCStatus.REJECTED)} className="p-4 bg-red-50 text-red-600 rounded-2xl hover:bg-red-100 transition-all border border-red-100 flex items-center gap-2">
-                                <ThumbsDown size={20}/> <span className="text-[9px] font-black uppercase">Reject</span>
+                              <button onClick={() => handleStatusChange(KYCStatus.REJECTED)} className="px-5 py-4 bg-red-50 text-red-600 rounded-2xl hover:bg-red-100 transition-all border border-red-100 flex flex-col items-center justify-center gap-1 group">
+                                <ThumbsDown size={20} className="group-hover:scale-110 transition-transform"/> <span className="text-[8px] font-black uppercase">Reject</span>
+                              </button>
+                           )}
+                           {selectedClient.kyc_status !== KYCStatus.UNDER_INVESTIGATION && (
+                              <button onClick={() => handleStatusChange(KYCStatus.UNDER_INVESTIGATION)} className="px-5 py-4 bg-orange-50 text-orange-600 rounded-2xl hover:bg-orange-100 transition-all border border-orange-100 flex flex-col items-center justify-center gap-1 group">
+                                <Eye size={20} className="group-hover:scale-110 transition-transform"/> <span className="text-[8px] font-black uppercase text-center leading-none">Investigation</span>
                               </button>
                            )}
                            {selectedClient.kyc_status !== KYCStatus.APPROVED && (
-                              <button onClick={() => handleStatusChange(KYCStatus.APPROVED)} className="px-8 py-4 bg-emerald-800 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-3 hover:bg-emerald-900 transition-all">
-                                <ThumbsUp size={18}/> Approve Protocol
+                              <button onClick={() => handleStatusChange(KYCStatus.APPROVED)} className="px-8 py-4 bg-emerald-800 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl flex items-center gap-3 hover:bg-emerald-900 transition-all group">
+                                <ThumbsUp size={18} className="group-hover:rotate-12 transition-transform"/> Approve Protocol
                               </button>
                            )}
                         </div>
@@ -648,6 +770,18 @@ const ClientManager: React.FC<ClientManagerProps> = ({
               <button onClick={() => setIsModalOpen(false)} className="bg-white/10 p-2.5 rounded-full"><X size={20}/></button>
             </div>
             <form onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto p-6 sm:p-10 space-y-8 custom-scrollbar bg-gray-50/30 pb-24">
+              {submissionError && (
+                <div className="p-4 bg-red-50 border border-red-100 rounded-[1.5rem] flex items-center gap-4 animate-in slide-in-from-top-2">
+                  <div className="p-2 bg-red-600 text-white rounded-lg animate-pulse">
+                    <AlertTriangle size={18} />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black uppercase text-red-600 tracking-widest">Protocol Persistence Warning</p>
+                    <p className="text-xs font-bold text-red-800 uppercase tracking-tight leading-tight">{submissionError}</p>
+                  </div>
+                  <button type="button" onClick={() => setSubmissionError(null)} className="p-2 text-red-400 hover:text-red-900"><X size={16}/></button>
+                </div>
+              )}
               
               <FormSection title="Registry & Identity" icon={<Landmark size={18}/>}>
                 <div className="sm:col-span-2">

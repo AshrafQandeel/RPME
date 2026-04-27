@@ -13,6 +13,7 @@ import {
   fetchSanctionsTotalCount, 
   upsertCloudSanctions, 
   deleteStaleSanctions,
+  deduplicateDatabase,
   setGlobalSyncLock, 
   logIngestionEvent, 
   fetchIngestionLogs, 
@@ -151,10 +152,24 @@ const SanctionsRegistry: React.FC<SanctionsRegistryProps> = ({ onSyncComplete, i
         
         const initialMapping: Record<string, string> = {};
         REQUIRED_SYSTEM_FIELDS.forEach(sf => {
-          const match = headers.find(h => 
-            h.toLowerCase().includes(sf.key.toLowerCase()) || 
-            sf.label.toLowerCase().includes(h.toLowerCase())
-          );
+          const match = headers.find(h => {
+            const lowH = h.toLowerCase().trim();
+            const lowK = sf.key.toLowerCase();
+            const lowL = sf.label.toLowerCase();
+            
+            // Exact matches first
+            if (lowH === lowK || lowH === lowL) return true;
+            
+            // Fuzzy keyword matches
+            if (lowK === 'firstname' && (lowH.includes('name') || lowH.includes('identity'))) return true;
+            if (lowK === 'lastname' && lowH.includes('surname')) return true;
+            if (lowK === 'dataid' && (lowH.includes('reference') || lowH.includes('id') || lowH.includes('permanent'))) return true;
+            if (lowK === 'referencenumber' && (lowH.includes('ref') || lowH.includes('code'))) return true;
+            if (lowK === 'comments' && (lowH.includes('comment') || lowH.includes('detail') || lowH.includes('info') || lowH.includes('note'))) return true;
+            if (lowK === 'type' && (lowH.includes('entity') || lowH.includes('person') || lowH.includes('type') || lowH.includes('legal'))) return true;
+            
+            return lowH.includes(lowK) || lowL.includes(lowH);
+          });
           if (match) initialMapping[sf.key] = match;
         });
 
@@ -192,12 +207,22 @@ const SanctionsRegistry: React.FC<SanctionsRegistryProps> = ({ onSyncComplete, i
 
   const commitSanctions = async (entries: SanctionEntry[], source: string, method: 'Automated' | 'Manual', batchTimestamp: string) => {
     const userHandle = currentUser?.email || currentUser?.id || 'System';
-    setIngestionCount(entries.length);
+    
+    // De-duplicate entries by dataId to prevent "ON CONFLICT DO UPDATE cannot affect row a second time"
+    const uniqueEntriesMap = new Map<string, SanctionEntry>();
+    entries.forEach(entry => {
+      if (!uniqueEntriesMap.has(entry.dataId)) {
+        uniqueEntriesMap.set(entry.dataId, entry);
+      }
+    });
+    const uniqueEntries = Array.from(uniqueEntriesMap.values());
+    
+    setIngestionCount(uniqueEntries.length);
     try {
       await setGlobalSyncLock(true, `${method} Upload: ${source}`, 0, source);
       
       // Phase 1: Ingest new records
-      await upsertCloudSanctions(entries, p => {
+      await upsertCloudSanctions(uniqueEntries, p => {
         setUploadProgress(p);
         if (p % 10 === 0) setGlobalSyncLock(true, `${method} Upload: ${source}`, p, source);
       });
@@ -205,6 +230,9 @@ const SanctionsRegistry: React.FC<SanctionsRegistryProps> = ({ onSyncComplete, i
       // Phase 2: State Purge (Delete the old)
       setStatus('PURGING');
       await deleteStaleSanctions(source, batchTimestamp);
+      
+      // Phase 3: Global De-duplication
+      const duplicateCount = await deduplicateDatabase();
       
       await setGlobalSyncLock(false, new Date().toLocaleString());
       
@@ -214,12 +242,13 @@ const SanctionsRegistry: React.FC<SanctionsRegistryProps> = ({ onSyncComplete, i
         method: method, 
         status: 'Success', 
         recordsProcessed: entries.length, 
+        duplicatesRemoved: duplicateCount,
         triggeredBy: userHandle
       });
 
       await logAuditEvent(
         method === 'Automated' ? 'REGISTRY_SYNC_FEED' : 'REGISTRY_MANUAL_IMPORT',
-        `Registry Refreshed: New state for "${source}" synchronized. Stale identities purged.`,
+        `Registry Refreshed: ${uniqueEntries.length} new records. Filtered ${duplicateCount} duplicates. State synchronized.`,
         userHandle
       );
 
@@ -272,6 +301,7 @@ const SanctionsRegistry: React.FC<SanctionsRegistryProps> = ({ onSyncComplete, i
             </div>
             <div>
                <h2 className="text-2xl font-black text-slate-900 uppercase tracking-tight">Authoritative Registry Hub</h2>
+               <p className="text-[9px] text-emerald-800 font-black uppercase tracking-widest mt-0.5 italic">Sort Protocol: Recently Synchronized First</p>
                <div className="flex items-center gap-2 mt-1">
                   <Activity size={12} className={isIngesting ? 'text-amber-500' : 'text-emerald-500'} />
                   <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
@@ -399,7 +429,9 @@ const SanctionsRegistry: React.FC<SanctionsRegistryProps> = ({ onSyncComplete, i
                   <CheckCircle2 size={24} />
                   <div className="min-w-0">
                      <p className="text-[10px] font-black uppercase tracking-widest">Update Protocol Success</p>
-                     <p className="text-[8px] font-bold uppercase opacity-60 mt-0.5">{ingestionCount.toLocaleString()} identities provisioned successfully.</p>
+                     <p className="text-[8px] font-bold uppercase opacity-60 mt-0.5">
+                       {ingestionCount.toLocaleString()} provisioned. Integrity protocol scrubbed duplicates.
+                     </p>
                   </div>
                </div>
              )}
@@ -521,12 +553,22 @@ const SanctionsRegistry: React.FC<SanctionsRegistryProps> = ({ onSyncComplete, i
       )}
 
       {errorMessage && (
-        <div className="p-6 bg-red-50 border border-red-100 rounded-3xl text-red-600 flex items-start gap-4 animate-in slide-in-from-top-2">
+        <div className="p-6 bg-red-50 border border-red-100 rounded-3xl text-red-600 flex items-start gap-4 animate-in slide-in-from-top-2 relative group">
            <AlertTriangle size={20} className="shrink-0 mt-0.5" />
-           <div className="space-y-1">
+           <div className="space-y-1 flex-1">
               <p className="text-[10px] font-black uppercase tracking-widest">Protocol Fault</p>
-              <p className="text-xs font-bold leading-relaxed">{errorMessage}</p>
+              <p className="text-xs font-bold leading-relaxed">
+                {errorMessage.includes('security policy') 
+                  ? "Database Shield Active: The master registry's Row-Level Security policy blocked this ingestion. Please ensure the 'sanctions' table has policies allowing insert/update for your current access level."
+                  : errorMessage}
+              </p>
            </div>
+           <button 
+             onClick={() => setErrorMessage(null)}
+             className="p-2 hover:bg-red-100 rounded-full transition-colors self-center"
+           >
+             <X size={16} />
+           </button>
         </div>
       )}
 

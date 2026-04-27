@@ -18,7 +18,8 @@ export enum KYCStatus {
   PENDING_REVIEW = 'Pending Review',
   APPROVED = 'Approved',
   REJECTED = 'Rejected',
-  SUSPENDED = 'Suspended'
+  SUSPENDED = 'Suspended',
+  UNDER_INVESTIGATION = 'Under Investigation'
 }
 
 export enum UserRole {
@@ -84,6 +85,7 @@ export interface MatchResult {
   score: number;
   riskLevel: RiskLevel;
   matchedFields: string[];
+  matchedRecord?: SanctionEntry;
   timestamp: string;
 }
 
@@ -131,6 +133,7 @@ export interface Client {
   kyc_status: KYCStatus;
   riskLevel: RiskLevel;
   matches?: string[];
+  match_details?: MatchResult | null;
   lastScreenedAt?: string;
   entity_type: EntityType;
 }
