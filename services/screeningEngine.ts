@@ -37,49 +37,11 @@ const calculateSimilarity = (s1: string, s2: string): number => {
   return (longer.length - levenshtein(longer, shorter)) / longer.length;
 };
 
-const isHighRiskMatch = (clientName: string, sanctionedName: string): { isMatch: boolean; type: string } => {
-  const cNorm = clientName.toUpperCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, " ");
-  const sNorm = sanctionedName.toUpperCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g, " ");
-
-  // 1. Exact Identity Comparison
-  if (cNorm.trim() === sNorm.trim()) return { isMatch: true, type: 'Exact Match' };
-  
-  // 2. Numeric Cross-Reference
-  const numericFragments = cNorm.match(/\d{4,}/g) || [];
-  for (const num of numericFragments) {
-    if (sNorm.includes(num)) return { isMatch: true, type: 'Numeric ID Match' };
-  }
-
-  // 3. Salient Token Consensus
-  const cTokens = cNorm.split(/\s+/).filter(t => t.length > 1 && !CORPORATE_NOISE.includes(t));
-  const sTokens = sNorm.split(/\s+/).filter(t => t.length > 1 && !CORPORATE_NOISE.includes(t));
-
-  if (sTokens.length === 0) return { isMatch: false, type: 'No Match' };
-
-  let salientMatches = 0;
-  for (const st of sTokens) {
-    // THRESHOLD ADJUSTMENT v21.2.0: 0.80 to catch character variations in salient words (SaNRISE vs SUNRISE)
-    if (cTokens.some(ct => ct === st || calculateSimilarity(ct, st) >= 0.80)) {
-      salientMatches++;
-    }
-  }
-  
-  // Rule: High-consensus token match (most of the name matches)
-  if (salientMatches >= 2 || (sTokens.length === 1 && salientMatches === 1)) {
-    return { isMatch: true, type: 'Salience Match' };
-  }
-
-  // 4. Global Fuzzy Fallback (Authoritative Catch-all)
-  const fuzzy = calculateSimilarity(cNorm, sNorm);
-  if (fuzzy > 0.45) return { isMatch: true, type: 'Fuzzy Similarity' };
-
-  return { isMatch: false, type: 'No Match' };
-};
-
 export const screenClient = (client: Client, sanctions: SanctionEntry[]): MatchResult | null => {
   if (!sanctions.length) return null;
 
-  const clientName = (client["Client Name"] || "").trim().toUpperCase();
+  const clientNameRaw = (client["Client Name"] || "").trim().toUpperCase();
+  const clientName = clientNameRaw.replace(/[().,'"]/g, ' ').replace(/\s+/g, ' ').trim();
   const clientNationality = (client["Company Nationality"] || '').toUpperCase();
   const cTokens = clientName.split(/\s+/).filter(t => t.length > 1 && !CORPORATE_NOISE.includes(t));
   

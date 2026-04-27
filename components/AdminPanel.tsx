@@ -162,6 +162,17 @@ ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "match_details" JSONB;
 ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "last_screened_at" TIMESTAMPTZ;
 ALTER TABLE "public"."clients" ADD COLUMN IF NOT EXISTS "entity_type" TEXT;
 
+-- 2.1 Data Migration Fallbacks (Ensuring continuity)
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='name') THEN
+        UPDATE public.clients SET client_name = name WHERE client_name IS NULL;
+    END IF;
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='clients' AND column_name='no') THEN
+        UPDATE public.clients SET file_no = no WHERE file_no IS NULL;
+    END IF;
+END $$;
+
 ALTER TABLE "public"."audit_logs" ADD COLUMN IF NOT EXISTS "actor_id" TEXT;
 ALTER TABLE "public"."auth_logs" ADD COLUMN IF NOT EXISTS "user_id" TEXT;
 ALTER TABLE "public"."kyc_workflow_history" ADD COLUMN IF NOT EXISTS "changed_by" TEXT;

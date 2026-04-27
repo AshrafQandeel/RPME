@@ -62,7 +62,7 @@ export const searchSanctionsAuthoritative = async (
   if (!supabaseClient) initSupabase();
   if (!supabaseClient) return { data: [], count: 0 };
   
-  const cleanName = name.trim().replace(/[(),'"]/g, '').toUpperCase();
+  const cleanName = name.trim().replace(/[().,'"]/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
   
   if (!cleanName) {
     const { data, count } = await supabaseClient
@@ -78,21 +78,40 @@ export const searchSanctionsAuthoritative = async (
       .filter(t => t.length >= 2 && !RETRIEVAL_NOISE.includes(t))
       .slice(0, 5); 
 
-    const cols = ['first_name', 'second_name', 'third_name', 'last_name', 'comments', 'data_id', 'reference_number'];
+    const cols = ['first_name', 'second_name', 'third_name', 'last_name', 'comments', 'data_id', 'reference_number', 'aliases'];
     const filterParts: string[] = [];
 
-    if (tokens.length === 0) {
-      const term = `%${cleanName}%`;
-      cols.forEach(col => filterParts.push(`${col}.ilike.${term}`));
-    } else {
+    // Always include a broad search on the full name if it's long enough
+    if (cleanName.length > 5) {
+      cols.forEach(col => {
+        if (col !== 'aliases') {
+          filterParts.push(`${col}.ilike.%${cleanName}%`);
+        }
+      });
+    }
+
+    if (tokens.length > 0) {
       tokens.forEach(t => {
         const term = `%${t}%`;
-        cols.forEach(col => filterParts.push(`${col}.ilike.${term}`));
+        cols.forEach(col => {
+          if (col === 'aliases') {
+            // Arrays in PostgREST need different handling, but we can try to cast or use simple containment
+            // For simplicity in a multi-column OR, we skip aliases from ilike and use separate logic if needed
+            // But if aliases is stored as JSONB with text, we can't ilike it easily.
+            // Let's assume aliases is a text field or we skip it for raw ilike to avoid errors.
+          } else {
+            filterParts.push(`${col}.ilike.${term}`);
+          }
+        });
         
         // Retrieval expansion for typos: search by short prefixes
         if (t.length >= 3) {
           const prefix = t.substring(0, Math.min(t.length - 1, 4));
-          cols.forEach(col => filterParts.push(`${col}.ilike.%${prefix}%`));
+          cols.forEach(col => {
+            if (col !== 'aliases') {
+              filterParts.push(`${col}.ilike.%${prefix}%`);
+            }
+          });
         }
       });
     }
@@ -134,35 +153,35 @@ export const fetchCloudClients = async (from: number, to: number, userRole?: str
   
   return (data || []).map((row: any) => ({
     id: row.id,
-    "No": row.file_no || row.no || '',
-    "Status": row.status || 'Active',
-    "QFC No": row.qfc_no || '',
-    "Legal Structure": row.legal_structure || '',
-    "Company Nationality": row.company_nationality || '',
-    "Client Name": row.client_name || '',
-    "Services Provided": row.services_provided || [],
-    "Engagement Year": row.engagement_year || '',
-    "Engagement Date": row.engagement_date || '',
-    "Onboarding Date": row.onboarding_date || '',
-    "Date of QFC Incorporation or Registration": row.qfc_incorp_date || row.incorporation_date || '',
-    "CR Expired date": row.cr_expiry_date || '',
-    "Entity Card No": row.entity_card_no || '',
-    "Entity Card Expiry": row.entity_card_expiry || '',
-    "License": row.license || '',
-    "License Expiry": row.license_expiry || '',
-    "Nature of Business": row.nature_of_business || '',
-    "Registered Address": row.registered_address || '',
-    "Telephone Number": row.telephone_number || '',
-    "E Mail": row.email || '',
-    "Website": row.website || '',
-    "Directors Names": row.directors || row.directors_names || [],
-    "Significant Shareholders": row.shareholders || [],
-    "UBO Details": row.ubo_details || row.ubos || [],
-    "Authorized Signatory": row.signatories || [],
-    "Secretary": row.secretary || '',
-    "Senior Executive Function": row.sef || row.senior_executive_function || '',
-    "Approved Auditor": row.auditor || row.approved_auditor || '',
-    "Company Type": row.company_type || '',
+    "No": row.No || row.file_no || row.no || row.fileNo || '',
+    "Status": row.Status || row.status || 'Active',
+    "QFC No": row["QFC No"] || row.qfc_no || row.qfcNo || row.qfc_number || '',
+    "Legal Structure": row["Legal Structure"] || row.legal_structure || row.legalStructure || row.structure || '',
+    "Company Nationality": row["Company Nationality"] || row["Corporate Nationality "] || row.company_nationality || row.companyNationality || row.nationality || row.country || '',
+    "Client Name": row["Client Name"] || row.client_name || row.clientName || row.name || row.full_name || '',
+    "Services Provided": row["Services Provided"] || row["Services needed"] || row.services_provided || row.servicesProvided || row.services || [],
+    "Engagement Year": row["Engagement Year"] || row["Engagement Year "] || row.engagement_year || row.engagementYear || row.year || '',
+    "Engagement Date": row["Engagement Date"] || row.engagement_date || row.engagementDate || '',
+    "Onboarding Date": row["Onboarding Date"] || row["Onboarding Date "] || row.onboarding_date || row.onboardingDate || '',
+    "Date of QFC Incorporation or Registration": row["Date of QFC Incorporation or Registration"] || row.qfc_incorp_date || row.incorporation_date || row.incorpDate || '',
+    "CR Expired date": row["CR Expired date"] || row.cr_expiry_date || row.crExpiryDate || row.cr_expiry || '',
+    "Entity Card No": row["Entity Card No"] || row.entity_card_no || row.entityCardNo || '',
+    "Entity Card Expiry": row["Entity Card Expiry"] || row.entity_card_expiry || row.entityCardExpiry || '',
+    "License": row.License || row.license || '',
+    "License Expiry": row["License Expiry"] || row.license_expiry || row.licenseExpiry || '',
+    "Nature of Business": row["Nature of Business"] || row.nature_of_business || row.natureOfBusiness || row.businessNature || '',
+    "Registered Address": row["Registered Address"] || row.registered_address || row.registeredAddress || row.address || '',
+    "Telephone Number": row["Telephone Number"] || row.telephone_number || row.telephoneNumber || row.phone || '',
+    "E Mail": row["E Mail"] || row.email || row.Email || '',
+    "Website": row.Website || row.website || '',
+    "Directors Names": row["Directors Names"] || row.directors_names || row.directorsNames || row.directors || [],
+    "Significant Shareholders": row["Significant Shareholders"] || row.shareholders || row.significantShareholders || row.significant_shareholders || [],
+    "UBO Details": row["UBO Details"] || row.ubo_details || row.ubos || row.uboDetails || [],
+    "Authorized Signatory": row["Authorized Signatory"] || row.signatories || row.authorizedSignatory || row.authorized_signatory || [],
+    "Secretary": row.Secretary || row.secretary || '',
+    "Senior Executive Function": row["Senior Executive Function"] || row.sef || row.senior_executive_function || row.sefName || row.sef_name || '',
+    "Approved Auditor": row["Approved Auditor"] || row.auditor || row.approved_auditor || row.auditorName || row.auditor_name || '',
+    "Company Type": row["Company Type"] || row.company_type || row.companyType || '',
     created_at: row.created_at,
     created_by: row.created_by,
     kyc_status: row.kyc_status as KYCStatus,
