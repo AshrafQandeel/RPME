@@ -628,15 +628,31 @@ export const screenEntityAdvanced = async (client: Client, triggeredBy?: string)
   const retrieval = await searchSanctionsAuthoritative(client["Client Name"], 0, 30);
   console.log(`[Deep AI Scan] Retrieval found ${retrieval.data.length} potential matches in DB.`);
   
-  // 2. Deep heuristics & weighted analysis using client-side Gemini logic
+  // 2. Deep heuristics & weighted analysis using server-side Gemini Proxy
   let detailedReport: DetailedMatchReport | null = null;
   try {
-    const { performAdvancedScreening } = await import('./geminiService');
-    detailedReport = await performAdvancedScreening(client, retrieval.data);
-    
+    const response = await fetch('/api/screening/advanced', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        client, 
+        potentialMatches: retrieval.data 
+      })
+    });
+
+    if (!response.ok) {
+      let errorMsg = `Server Error: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMsg = errorData.error || errorMsg;
+      } catch (e) {}
+      throw new Error(errorMsg);
+    }
+
+    detailedReport = await response.json();
     console.log(`[Deep AI Scan] AI Analysis Completed. Result: ${detailedReport?.overall_result || 'N/A'}`);
   } catch (aiErr: any) {
-    console.error("[Deep AI Scan] AI logic Failure:", aiErr.message);
+    console.error("[Deep AI Scan] Bridge Failure:", aiErr.message);
     throw aiErr;
   }
   

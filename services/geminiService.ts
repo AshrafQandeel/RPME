@@ -163,6 +163,12 @@ export async function performAdvancedScreening(client: Client, sanEntries: Sanct
     return JSON.parse(text) as DetailedMatchReport;
   } catch (err: any) {
     console.error("[AI-SCREEN] Execution Failure:", err);
+    
+    // Specifically handle quota/billing errors for better user guidance
+    if (err.message?.includes("RESOURCE_EXHAUSTED") || err.message?.includes("429")) {
+      throw new Error("Gemini API Quota Exceeded: Your prepayment credits are depleted or you've reached the rate limit. Please manage your billing at ai.studio or switch to a free tier key.");
+    }
+    
     throw new Error(err.message || "An unexpected error occurred during the AI screening process.");
   }
 }

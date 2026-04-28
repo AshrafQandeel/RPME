@@ -53,6 +53,34 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Advanced Screening Route
+app.post('/api/screening/advanced', async (req, res) => {
+  const { client, potentialMatches } = req.body;
+  const clientName = client?.["Client Name"] || 'Unknown';
+  console.log(`[Server] >>> Start Advanced Screening for: ${clientName}`);
+
+  try {
+    if (!client) {
+      return res.status(400).json({ error: 'Client data is required' });
+    }
+
+    // Dynamic import to Gemini Service
+    const { performAdvancedScreening } = await import('./services/geminiService');
+    
+    console.log('[Server] Executing AI Analysis...');
+    const report = await performAdvancedScreening(client, potentialMatches || []);
+    
+    console.log(`[Server] <<< Screening result: ${report?.overall_result || 'CLEAR'}`);
+    res.json(report);
+  } catch (error: any) {
+    console.error('[Advanced Screening API] CRITICAL ERROR:', error.message);
+    res.status(500).json({ 
+      error: error.message || 'An error occurred during screening',
+      type: 'AI_SCREENING_ERROR'
+    });
+  }
+});
+
 // Production static serving
 const distPath = path.join(process.cwd(), 'dist');
 
