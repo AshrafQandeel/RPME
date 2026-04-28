@@ -9,8 +9,9 @@ import {
   Info, MapPin, Mail, Globe, FileSignature, 
   History, Fingerprint, ShieldCheck, ThumbsUp, ThumbsDown,
   Clock, Edit3, AlertTriangle, Phone, Calendar, Briefcase, UserPlus, Key, FileBadge, UserCheck, User,
-  FileCheck
+  FileCheck, CloudUpload, AlertCircle, Sparkles, Upload
 } from 'lucide-react';
+import { DocumentUploadModal } from './DocumentUploadModal';
 
 const CLIENTS_PER_PAGE = 15;
 
@@ -221,6 +222,10 @@ const ClientManager: React.FC<ClientManagerProps> = ({
   const [pendingDeleteClient, setPendingDeleteClient] = useState<Client | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [isDocumentModalOpen, setIsDocumentModalOpen] = useState(false);
+  const [clientForDocuments, setClientForDocuments] = useState<Client | null>(null);
+  const [showDocWarning, setShowDocWarning] = useState(false);
+  const [pendingCommitClient, setPendingCommitClient] = useState<Client | null>(null);
 
   const totalPages = Math.ceil(totalCount / CLIENTS_PER_PAGE);
   const [formData, setFormData] = useState({ ...INITIAL_FORM_STATE });
@@ -262,16 +267,47 @@ const ClientManager: React.FC<ClientManagerProps> = ({
 
   const handleDossierCommit = async () => {
     if (!selectedClient || isSubmitting) return;
+
+    // Document warning logic
+    if (!selectedClient.document_count && !showDocWarning) {
+      setPendingCommitClient(selectedClient);
+      setShowDocWarning(true);
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       // Ensure we await the update protocol in the parent App component
       await onUpdateClient(selectedClient);
       setSelectedClient(null); // Success: Close modal
+      setShowDocWarning(false);
+      setPendingCommitClient(null);
     } catch (err: any) {
       console.error("[Registry] Update Fault:", err);
       alert("Registry Sync Failure: " + (err.message || "Unknown error during cloud commit. Ensure registry is online."));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleConfirmedCommit = async () => {
+    if (pendingCommitClient) {
+      // Commit selected client update
+      setIsSubmitting(true);
+      try {
+        await onUpdateClient(pendingCommitClient);
+        setSelectedClient(null);
+        setShowDocWarning(false);
+        setPendingCommitClient(null);
+      } catch (err: any) {
+        alert("Commit Failed: " + err.message);
+      } finally {
+        setIsSubmitting(false);
+      }
+    } else {
+      // Commit new entity creation
+      setShowDocWarning(false);
+      handleSubmit();
     }
   };
 
@@ -290,11 +326,17 @@ const ClientManager: React.FC<ClientManagerProps> = ({
     setSelectedClient(null); // Close dossier if open
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (isSubmitting) return;
-    setSubmissionError(null);
 
+    // Check for documents if committing
+    if (!editMode && !formData.document_count && !showDocWarning) {
+      setShowDocWarning(true);
+      return;
+    }
+
+    setSubmissionError(null);
     const errors: string[] = [];
     if (!formData["Client Name"]) errors.push("Client Name");
     if (!formData["No"]) errors.push("No");
@@ -421,14 +463,22 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                 <th className="px-6 sm:px-10 py-5 sm:py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Entity Name</th>
                 <th className="px-6 sm:px-10 py-5 sm:py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Compliance Workflow</th>
                 <th className="px-6 sm:px-10 py-5 sm:py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Risk Index</th>
+                <th className="px-6 sm:px-10 py-5 sm:py-6 text-[10px] font-black text-gray-400 uppercase tracking-widest">Documents</th>
                 <th className="px-6 sm:px-10 py-5 sm:py-6 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {clients.map(client => (
-                <tr key={client.id} className="hover:bg-emerald-50/20 cursor-pointer transition-colors group" onClick={() => setSelectedClient(client)}>
+                <tr key={client.id} className={`hover:bg-emerald-50/20 cursor-pointer transition-colors group ${!client.document_count ? 'bg-red-50/20' : ''}`} onClick={() => setSelectedClient(client)}>
                   <td className="px-6 sm:px-10 py-5 sm:py-6">
-                    <div className="font-black text-emerald-950 text-sm tracking-tight">{client["Client Name"]}</div>
+                    <div className="font-black text-emerald-950 text-sm tracking-tight flex items-center gap-2">
+                      {client["Client Name"]}
+                      {!client.document_count && (
+                        <span className="bg-red-100 text-red-600 p-1 rounded-full" title="Documents Missing">
+                          <AlertCircle size={12} />
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[8px] text-gray-400 font-bold uppercase mt-1">Ref: {client["No"]} • {client["Legal Structure"] || 'Corporate'}</div>
                   </td>
                   <td className="px-6 sm:px-10 py-5 sm:py-6">
@@ -454,6 +504,28 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                          {client.riskLevel === RiskLevel.HIGH ? <ShieldAlert size={10} /> : <CheckCircle size={10} />}
                          {client.riskLevel === RiskLevel.HIGH ? 'HIGH RISK' : 'CLEAR'}
                        </span>
+                    </div>
+                  </td>
+                  <td className="px-6 sm:px-10 py-5 sm:py-6">
+                    <div className="flex items-center gap-2">
+                       {client.document_count ? (
+                         <div className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
+                           <FileCheck size={12} />
+                           <span className="text-[9px] font-black">{client.document_count} FILES</span>
+                         </div>
+                       ) : (
+                         <div className="flex items-center gap-1.5 text-red-500 bg-red-50 px-2 py-1 rounded-md border border-red-100">
+                           <AlertCircle size={12} />
+                           <span className="text-[9px] font-black uppercase tracking-tighter">MISSING</span>
+                         </div>
+                       )}
+                       <button 
+                         onClick={(e) => { e.stopPropagation(); setClientForDocuments(client); setIsDocumentModalOpen(true); }}
+                         className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
+                         title="Upload / View Documents"
+                       >
+                         <CloudUpload size={16} />
+                       </button>
                     </div>
                   </td>
                   <td className="px-6 sm:px-10 py-5 sm:py-6 text-right">
@@ -514,7 +586,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({
       {/* DELETE CONFIRMATION MODAL */}
       {pendingDeleteClient && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-           <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95">
+           <div className="bg-white rounded-[2.5rem] w-full max-md shadow-2xl overflow-hidden animate-in zoom-in-95">
               <div className="p-10 text-center space-y-6">
                  <div className="w-20 h-20 bg-red-50 text-red-600 rounded-3xl flex items-center justify-center mx-auto">
                     <AlertTriangle size={40} />
@@ -536,6 +608,54 @@ const ClientManager: React.FC<ClientManagerProps> = ({
               </div>
            </div>
         </div>
+      )}
+
+      {/* DOCUMENT WARNING MODAL */}
+      {showDocWarning && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-[300] flex items-center justify-center p-4">
+           <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl overflow-hidden animate-in zoom-in-95">
+              <div className="p-10 text-center space-y-6">
+                 <div className="w-20 h-20 bg-amber-50 text-amber-600 rounded-3xl flex items-center justify-center mx-auto">
+                    <CloudUpload size={40} />
+                 </div>
+                 <div>
+                    <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Documents Missing</h3>
+                    <p className="text-xs font-bold text-slate-400 mt-2 leading-relaxed uppercase">
+                       This entity has no supporting documents. Do you want to continue and commit without documents, or upload them now?
+                    </p>
+                 </div>
+                 <div className="flex flex-col gap-3">
+                    <button 
+                      onClick={() => { setShowDocWarning(false); setClientForDocuments(pendingCommitClient || formData as Client); setIsDocumentModalOpen(true); }} 
+                      className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
+                    >
+                      <Upload size={16} /> Upload Documents
+                    </button>
+                    <button onClick={handleConfirmedCommit} className="w-full py-4 bg-emerald-800 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2">
+                       <CheckCircle size={16} /> Confirm & Commit
+                    </button>
+                    <button onClick={() => { setShowDocWarning(false); setPendingCommitClient(null); }} className="w-full py-4 bg-gray-100 text-gray-500 rounded-2xl font-black text-[10px] uppercase tracking-widest">
+                       Cancel
+                    </button>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* DOCUMENT MANAGER MODAL */}
+      {isDocumentModalOpen && clientForDocuments && (
+        <DocumentUploadModal 
+          isOpen={isDocumentModalOpen}
+          onClose={() => { setIsDocumentModalOpen(false); setClientForDocuments(null); }}
+          client={clientForDocuments}
+          onUpdateClient={(updated) => {
+            onUpdateClient(updated);
+            if (selectedClient && selectedClient.id === updated.id) {
+              setSelectedClient(updated);
+            }
+          }}
+        />
       )}
 
       {/* CLIENT DOSSIER MODAL */}

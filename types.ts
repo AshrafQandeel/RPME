@@ -175,6 +175,20 @@ export interface Client {
   match_details?: MatchResult | null;
   lastScreenedAt?: string;
   entity_type: EntityType;
+  google_drive_folder_id?: string;
+  document_count?: number;
+}
+
+export interface ClientDocument {
+  id: string;
+  name: string;
+  mimeType: string;
+  webViewLink?: string;
+  webContentLink?: string;
+  createdTime: string;
+  size?: number;
+  type?: string; 
+  description?: string;
 }
 
 export interface IngestionLog {
