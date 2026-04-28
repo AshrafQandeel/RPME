@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx';
 export const OFFICIAL_UN_XML_URL = "https://scsanctions.un.org/resources/xml/en/consolidated.xml";
 export const QATAR_NCTC_PORTAL_URL = "https://portal.moi.gov.qa/wps/portal/NCTC/sanctionlist/unifiedsanctionlist/!ut/p/a1/hc29DsIgAATgZ_EJOIG2dqSkASKINSRWlobJkGh1MD6_-LOqt13yXY5EMpI4p3s-plu-zOn07LGeTEs51ZxaL7nAwDoTHHNQqirgUEClba_4GhvVhA6DpzrUO02B5b_9nsQ3Ec6Acljfy0JaHbRkwGrbfMCvixfAlwiQ63lENmLxAKkSZVg!/dl5/d5/L0lDUmlTUSEhL3dHa0FKRnNBLzRKVXBDQSEhL2VuX1VT/";
 
-export const OPENSANCTIONS_URL = "https://www.opensanctions.org/datasets/default/entities.json";
+export const OPENSANCTIONS_URL = "https://data.opensanctions.org/datasets/latest/default/targets.nested.json";
 export const OFAC_SDN_URL = "https://www.treasury.gov/ofac/downloads/sdn.csv";
 
 const LOCAL_PROXY = "/api/proxy?url=";
@@ -115,7 +115,8 @@ export const parseQatarNCTCHTML = (htmlString: string, fetchDate: string = new D
  */
 const fetchRawContent = async (url: string): Promise<string> => {
   try {
-    const resp = await fetch(`${LOCAL_PROXY}${encodeURIComponent(url)}`);
+    // Using globalThis.fetch explicitly to avoid potential local collisions or getter/setter issues
+    const resp = await globalThis.fetch(`${LOCAL_PROXY}${encodeURIComponent(url)}`);
     if (!resp.ok) {
       const errorData = await resp.json().catch(() => ({}));
       throw new Error(errorData.details || `Proxy fault: ${resp.status}`);

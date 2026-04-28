@@ -15,6 +15,7 @@ import {
   deleteStaleSanctions,
   fetchClientsTotalCount,
   screenEntityAgainstDb,
+  screenEntityAdvanced,
   validateRegistrySchemaV431,
   logAuditEvent,
   fetchSystemLogs,
@@ -34,6 +35,7 @@ import ClientManager from './components/ClientManager';
 import SanctionsRegistry from './components/SanctionsRegistry';
 import AdminPanel from './components/AdminPanel';
 import Login from './components/Login';
+import LandingPage from './components/LandingPage';
 import PasswordUpdate from './components/PasswordUpdate';
 import { Client, AppSettings, UserProfile, SystemEnvironment, ScreeningProgress, SystemLog, KYCStatus, RiskLevel } from './types';
 
@@ -329,6 +331,21 @@ const App: React.FC = () => {
     } finally { setIsRefreshingClients(false); }
   };
 
+  const handleAdvancedScreening = async (client: Client) => {
+    setIsRefreshingClients(true);
+    try {
+      const screenedClient = await screenEntityAdvanced(client, currentUser?.email);
+      await upsertCloudClient(screenedClient);
+      await refreshClients(currentClientsPage);
+      return screenedClient;
+    } catch (e: any) {
+      console.error("[Advanced Scan] Failure:", e);
+      throw e;
+    } finally {
+      setIsRefreshingClients(false);
+    }
+  };
+
   const handleUpdateSettings = async (newSettings: AppSettings) => {
     setSettings(newSettings);
     localStorage.setItem('unsg_settings', JSON.stringify(newSettings));
@@ -379,30 +396,195 @@ const App: React.FC = () => {
 
   const effectiveEnvironment = globalEnvironment;
   
-  if (!currentUser) {
-    return <Login onLogin={(u) => { 
-      setCurrentUser(u); 
-      localStorage.setItem('unsg_session', JSON.stringify(u)); 
-      logAuditEvent('SESSION_INITIALIZED', `User authenticated.`, u.email).then(() => loadLogs());
-    }} isCloudConnected={connectionStatus === 'CONNECTED' || connectionStatus === 'SAFE_MODE'} />;
-  }
-
-  if (currentUser.must_change_password) {
-    return <PasswordUpdate user={currentUser} onUpdate={handlePasswordUpdate} />;
-  }
-  
   return (
     <Router>
-      <Layout isCloudConnected={connectionStatus === 'CONNECTED'} isConnecting={connectionStatus === 'CONNECTING'} isSafeMode={connectionStatus === 'SAFE_MODE'} schemaFaults={schemaDiscrepancies} onLogout={() => { logAuditEvent('SESSION_TERMINATED', `User logged out.`, currentUser.email).then(() => loadLogs()); setCurrentUser(null); localStorage.removeItem('unsg_session'); }} currentUser={currentUser} onRetryConnection={() => bootEnterpriseNode()} environment={effectiveEnvironment}>
-        <Routes>
-          <Route path="/" element={<Dashboard clients={clients} totalClientsCount={clientsCount} sanctionsCount={sanctionsCount} registryStats={registryStats} isGlobalSyncing={isGlobalSyncing} environment={effectiveEnvironment} riskSummary={riskSummary} />} />
-          <Route path="/clients" element={<ClientManager clients={clients} totalCount={clientsCount} currentPage={currentClientsPage} onPageChange={refreshClients} isRefreshing={isRefreshingClients} onAddClient={handleAddClientWithAuthoritativeScreening} onDeleteClient={handleDeleteClient} onRefresh={() => refreshClients(currentClientsPage)} onReScreen={handleGlobalBatchScreening} onUpdateClient={handleUpdateClient} screeningProgress={screeningProgress} currentUserRole={currentUser.role} currentUserId={currentUser.id} />} />
-          <Route path="/sanctions" element={<SanctionsRegistry onSyncComplete={() => loadSanctionsCache()} isCloudConnected={connectionStatus === 'CONNECTED' || connectionStatus === 'SAFE_MODE'} initialStats={registryStats} isGlobalSyncing={isGlobalSyncing} environment={effectiveEnvironment} currentUser={currentUser} />} />
-          <Route path="/admin" element={currentUser.is_system_admin === true ? <AdminPanel settings={settings} logs={systemLogs} onUpdateSettings={handleUpdateSettings} currentUser={currentUser} onLogsRefresh={loadLogs} /> : <Navigate to="/" replace />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Layout>
+      <Routes>
+        {/* PUBLIC ROUTES */}
+        <Route path="/" element={<LandingPage />} />
+        <Route 
+          path="/login" 
+          element={
+            currentUser ? 
+            <Navigate to="/dashboard" replace /> : 
+            <Login 
+              onLogin={(u) => { 
+                setCurrentUser(u); 
+                localStorage.setItem('unsg_session', JSON.stringify(u)); 
+                logAuditEvent('SESSION_INITIALIZED', `User authenticated.`, u.email).then(() => loadLogs());
+              }} 
+              isCloudConnected={connectionStatus === 'CONNECTED' || connectionStatus === 'SAFE_MODE'} 
+            />
+          } 
+        />
+
+        {/* PROTECTED APP ROUTES */}
+        <Route 
+          path="/dashboard" 
+          element={
+            <ProtectedRoute 
+              currentUser={currentUser} 
+              connectionStatus={connectionStatus} 
+              schemaDiscrepancies={schemaDiscrepancies} 
+              onLogout={() => { 
+                logAuditEvent('SESSION_TERMINATED', `User logged out.`, currentUser?.email || '').then(() => loadLogs()); 
+                setCurrentUser(null); 
+                localStorage.removeItem('unsg_session'); 
+                window.location.href = '#/';
+              }}
+              onRetryConnection={() => bootEnterpriseNode()}
+              effectiveEnvironment={effectiveEnvironment}
+              onPasswordUpdate={handlePasswordUpdate}
+            >
+              <Dashboard 
+                clients={clients} 
+                totalClientsCount={clientsCount} 
+                sanctionsCount={sanctionsCount} 
+                registryStats={registryStats} 
+                isGlobalSyncing={isGlobalSyncing} 
+                environment={effectiveEnvironment} 
+                riskSummary={riskSummary} 
+              />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/clients" 
+          element={
+            <ProtectedRoute 
+              currentUser={currentUser} 
+              connectionStatus={connectionStatus} 
+              schemaDiscrepancies={schemaDiscrepancies} 
+              onLogout={() => { 
+                logAuditEvent('SESSION_TERMINATED', `User logged out.`, currentUser?.email || '').then(() => loadLogs()); 
+                setCurrentUser(null); 
+                localStorage.removeItem('unsg_session'); 
+                window.location.href = '#/';
+              }}
+              onRetryConnection={() => bootEnterpriseNode()}
+              effectiveEnvironment={effectiveEnvironment}
+              onPasswordUpdate={handlePasswordUpdate}
+            >
+              <ClientManager 
+                clients={clients} 
+                totalCount={clientsCount} 
+                currentPage={currentClientsPage} 
+                onPageChange={refreshClients} 
+                isRefreshing={isRefreshingClients} 
+                onAddClient={handleAddClientWithAuthoritativeScreening} 
+                onDeleteClient={handleDeleteClient} 
+                onRefresh={() => refreshClients(currentClientsPage)} 
+                onReScreen={handleGlobalBatchScreening} 
+                onUpdateClient={handleUpdateClient} 
+                onAdvancedScreening={handleAdvancedScreening} 
+                screeningProgress={screeningProgress} 
+                currentUserRole={currentUser?.role as any} 
+                currentUserId={currentUser?.id as any} 
+              />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/sanctions" 
+          element={
+            <ProtectedRoute 
+              currentUser={currentUser} 
+              connectionStatus={connectionStatus} 
+              schemaDiscrepancies={schemaDiscrepancies} 
+              onLogout={() => { 
+                logAuditEvent('SESSION_TERMINATED', `User logged out.`, currentUser?.email || '').then(() => loadLogs()); 
+                setCurrentUser(null); 
+                localStorage.removeItem('unsg_session'); 
+                window.location.href = '#/';
+              }}
+              onRetryConnection={() => bootEnterpriseNode()}
+              effectiveEnvironment={effectiveEnvironment}
+              onPasswordUpdate={handlePasswordUpdate}
+            >
+              <SanctionsRegistry 
+                onSyncComplete={() => loadSanctionsCache()} 
+                isCloudConnected={connectionStatus === 'CONNECTED' || connectionStatus === 'SAFE_MODE'} 
+                initialStats={registryStats} 
+                isGlobalSyncing={isGlobalSyncing} 
+                environment={effectiveEnvironment} 
+                currentUser={currentUser as any} 
+              />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute 
+              currentUser={currentUser} 
+              connectionStatus={connectionStatus} 
+              schemaDiscrepancies={schemaDiscrepancies} 
+              onLogout={() => { 
+                logAuditEvent('SESSION_TERMINATED', `User logged out.`, currentUser?.email || '').then(() => loadLogs()); 
+                setCurrentUser(null); 
+                localStorage.removeItem('unsg_session'); 
+                window.location.href = '#/';
+              }}
+              onRetryConnection={() => bootEnterpriseNode()}
+              effectiveEnvironment={effectiveEnvironment}
+              onPasswordUpdate={handlePasswordUpdate}
+            >
+              {(currentUser?.is_system_admin === true) ? (
+                <AdminPanel 
+                  settings={settings} 
+                  logs={systemLogs} 
+                  onUpdateSettings={handleUpdateSettings} 
+                  currentUser={currentUser} 
+                  onLogsRefresh={loadLogs} 
+                />
+              ) : <Navigate to="/dashboard" replace />}
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* FALLBACK */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </Router>
+  );
+};
+
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  currentUser: UserProfile | null;
+  connectionStatus: string;
+  schemaDiscrepancies: string[];
+  onLogout: () => void;
+  onRetryConnection: () => void;
+  effectiveEnvironment: SystemEnvironment;
+  onPasswordUpdate: (pwd: string) => Promise<void>;
+}
+
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
+  children, 
+  currentUser, 
+  connectionStatus, 
+  schemaDiscrepancies, 
+  onLogout, 
+  onRetryConnection, 
+  effectiveEnvironment,
+  onPasswordUpdate
+}) => {
+  if (!currentUser) return <Navigate to="/" replace />;
+  if (currentUser.must_change_password) return <PasswordUpdate user={currentUser} onUpdate={onPasswordUpdate} />;
+  
+  return (
+    <Layout 
+      isCloudConnected={connectionStatus === 'CONNECTED'} 
+      isConnecting={connectionStatus === 'CONNECTING'} 
+      isSafeMode={connectionStatus === 'SAFE_MODE'} 
+      schemaFaults={schemaDiscrepancies} 
+      onLogout={onLogout} 
+      currentUser={currentUser} 
+      onRetryConnection={onRetryConnection} 
+      environment={effectiveEnvironment}
+    >
+      {children}
+    </Layout>
   );
 };
 

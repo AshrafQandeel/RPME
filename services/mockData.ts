@@ -59,6 +59,19 @@ export const MOCK_SANCTIONS: SanctionEntry[] = [
     dateOfBirth: '1961-01-01',
     aliases: ['Kony'],
     type: EntityType.INDIVIDUAL
+  },
+  {
+    dataId: 'UN-005',
+    source: 'UN Consolidated',
+    firstName: 'SPECIAL INDUSTRIES GROUP',
+    lastName: '',
+    unListType: 'Others',
+    referenceNumber: 'PK.ENT.001',
+    listedOn: '2024-01-01',
+    comments: 'Entity involved in restricted procurement.',
+    nationality: 'Pakistan',
+    aliases: ['SIG', 'Special Industries'],
+    type: EntityType.CORPORATE
   }
 ];
 

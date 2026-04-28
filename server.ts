@@ -46,7 +46,11 @@ app.get('/api/proxy', async (req, res) => {
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString(), env: process.env.NODE_ENV });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(), 
+    env: process.env.NODE_ENV
+  });
 });
 
 // Production static serving

@@ -189,6 +189,7 @@ interface ClientManagerProps {
   onUpdateClient: (client: Client) => Promise<void>;
   onRefresh: () => void;
   onReScreen?: () => void;
+  onAdvancedScreening?: (client: Client) => Promise<Client>;
   screeningProgress?: ScreeningProgress;
   currentUserRole: UserRole;
   currentUserId: string;
@@ -205,12 +206,15 @@ const ClientManager: React.FC<ClientManagerProps> = ({
   onUpdateClient,
   onRefresh, 
   onReScreen,
+  onAdvancedScreening,
   screeningProgress,
   currentUserRole, 
   currentUserId 
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isScanningAdvanced, setIsScanningAdvanced] = useState(false);
+  const [advancedScreenError, setAdvancedScreenError] = useState<string | null>(null);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
@@ -233,6 +237,27 @@ const ClientManager: React.FC<ClientManagerProps> = ({
     const updated = { ...selectedClient, kyc_status: status };
     // UI feedback immediate
     setSelectedClient(updated);
+  };
+
+  const handleAdvancedScreen = async () => {
+    if (!selectedClient || !onAdvancedScreening || isScanningAdvanced) return;
+    setIsScanningAdvanced(true);
+    setAdvancedScreenError(null);
+    try {
+      console.log("[ClientManager] Initiating Advanced Screening for client ID:", selectedClient.id);
+      const updated = await onAdvancedScreening(selectedClient);
+      console.log("[ClientManager] Advanced Screening completed. Resulting Client:", updated);
+      if (updated) {
+        setSelectedClient(updated);
+      } else {
+        console.warn("[ClientManager] onAdvancedScreening returned null or undefined.");
+      }
+    } catch (err: any) {
+      console.error("[ClientManager] handleAdvancedScreen caught error:", err);
+      setAdvancedScreenError(err.message || "An unexpected error occurred during AI analysis.");
+    } finally {
+      setIsScanningAdvanced(false);
+    }
   };
 
   const handleDossierCommit = async () => {
@@ -544,27 +569,60 @@ const ClientManager: React.FC<ClientManagerProps> = ({
 
             <div className="flex-1 overflow-y-auto p-8 sm:p-12 space-y-12 custom-scrollbar bg-gray-50/30">
                
-               {/* ENHANCED SCREENING RESULT SECTION */}
-               {selectedClient.match_details && (
-                  <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom-2">
-                     <div className="bg-slate-50 p-6 border-b border-gray-100 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                           <div className="p-2 bg-emerald-900 text-white rounded-lg">
-                              <ScanSearch size={18} />
-                           </div>
-                           <h3 className="text-xs font-black uppercase tracking-widest text-slate-800">Screening Result</h3>
-                        </div>
-                        <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase border ${
-                           selectedClient.riskLevel === RiskLevel.HIGH ? 'bg-red-500 text-white border-red-600 shadow-lg shadow-red-200' :
-                           selectedClient.riskLevel === RiskLevel.MEDIUM ? 'bg-amber-100 text-amber-700 border-amber-200' :
-                           'bg-emerald-100 text-emerald-700 border-emerald-200'
-                        }`}>
-                           {selectedClient.riskLevel} Similarity Detected
-                        </span>
+               {advancedScreenError && (
+                  <div className="bg-red-50 border border-red-200 p-6 rounded-[2rem] flex items-start gap-4 animate-in fade-in slide-in-from-top-4">
+                     <div className="bg-red-100 p-3 rounded-2xl text-red-600">
+                        <AlertTriangle size={24} />
                      </div>
-                     
-                     <div className="p-8 space-y-8">
-                        <div className="flex flex-col md:flex-row items-center gap-8 bg-gray-50/50 p-8 rounded-[2rem]">
+                     <div className="flex-1 space-y-1">
+                        <h4 className="text-[10px] font-black text-red-600 uppercase tracking-[0.2em]">Advanced Screening Exception</h4>
+                        <p className="text-sm font-bold text-red-900 leading-snug">{advancedScreenError}</p>
+                        <p className="text-[9px] font-bold text-red-500/70 uppercase mt-2">The system will maintain existing algorithmic screening results as a fallback.</p>
+                     </div>
+                     <button onClick={() => setAdvancedScreenError(null)} className="p-2 hover:bg-red-100 rounded-xl transition-all text-red-400 hover:text-red-600">
+                        <X size={20} />
+                     </button>
+                  </div>
+               )}
+
+               {/* ENHANCED SCREENING RESULT SECTION */}
+               <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-xl overflow-hidden animate-in fade-in slide-in-from-bottom-2">
+                  <div className="bg-slate-50 p-6 border-b border-gray-100 flex items-center justify-between">
+                     <div className="flex items-center gap-3">
+                        <div className="p-2 bg-emerald-900 text-white rounded-lg">
+                           <ScanSearch size={18} />
+                        </div>
+                        <h3 className="text-xs font-black uppercase tracking-widest text-slate-800">Advanced Match Intelligence</h3>
+                     </div>
+                     <div className="flex items-center gap-3">
+                        <button 
+                           onClick={handleAdvancedScreen} 
+                           disabled={isScanningAdvanced}
+                           className="px-4 py-2 bg-emerald-800 text-white rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-emerald-900 transition-all flex items-center gap-2 disabled:opacity-50"
+                        >
+                           {isScanningAdvanced ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                           Run Deep AI Scan
+                        </button>
+                        {selectedClient.match_details ? (
+                          <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase border ${
+                             selectedClient.riskLevel === RiskLevel.HIGH ? 'bg-red-500 text-white border-red-600 shadow-lg shadow-red-200' :
+                             selectedClient.riskLevel === RiskLevel.MEDIUM ? 'bg-amber-100 text-amber-700 border-amber-200' :
+                             'bg-emerald-100 text-emerald-700 border-emerald-200'
+                          }`}>
+                             {selectedClient.riskLevel} Similarity Detected
+                          </span>
+                        ) : (
+                          <span className="px-4 py-1.5 rounded-full text-[9px] font-black uppercase border bg-slate-100 text-slate-500 border-slate-200">
+                             Clear Profile
+                          </span>
+                        )}
+                     </div>
+                  </div>
+                  
+                  {selectedClient.match_details ? (
+                    <div className="p-8 space-y-8">
+                       {/* Composite Progress Indicator */}
+                       <div className="flex flex-col md:flex-row items-center gap-8 bg-gray-50/50 p-8 rounded-[2rem]">
                            <div className="shrink-0 relative">
                               <svg className="w-32 h-32 transform -rotate-90">
                                  <circle cx="64" cy="64" r="58" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-gray-200" />
@@ -579,8 +637,8 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                                  />
                               </svg>
                               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                 <span className="text-2xl font-black text-slate-900">{selectedClient.match_details.score}%</span>
-                                 <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Similarity</span>
+                                 <span className="text-2xl font-black text-slate-900">{Math.round(selectedClient.match_details.score)}%</span>
+                                 <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Weighted</span>
                               </div>
                            </div>
                            
@@ -588,16 +646,76 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                               <div className="flex items-center gap-3">
                                  <AlertTriangle size={20} className={selectedClient.match_details.score > 50 ? 'text-red-500' : 'text-amber-500'} />
                                  <h4 className="text-base font-black text-slate-900 uppercase tracking-tight">
-                                    {selectedClient.match_details.score > 80 ? 'Authoritative Match Confirmed' : 
-                                     selectedClient.match_details.score > 40 ? 'Potential Identity Conflict' : 'Low Relevance Match'}
+                                    {selectedClient.match_details.detailed_report?.overall_result || selectedClient.match_details.matchedFields[0]}
                                  </h4>
                               </div>
                               <p className="text-[10px] font-bold text-slate-500 leading-relaxed uppercase">
-                                 System has identified a correlation with a record in the global sanctions registry. 
-                                 Primary reason: <span className="text-slate-900 font-black">{selectedClient.match_details.matchedFields.join(', ')}</span>.
+                                 {selectedClient.match_details.detailed_report?.screener_notes || 
+                                  `System has identified a correlation with a record in the global sanctions registry. Primary reason: ${selectedClient.match_details.matchedFields.join(', ')}.`}
                               </p>
+                              {selectedClient.match_details.detailed_report && (
+                                 <div className="text-[9px] font-black text-emerald-800 uppercase tracking-widest bg-emerald-50 px-3 py-1.5 rounded-lg inline-block">
+                                    Recommended Action: {selectedClient.match_details.detailed_report.overall_recommended_action}
+                                 </div>
+                              )}
                            </div>
                         </div>
+
+                        {/* Weighted Components Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                           {[
+                              { label: 'Name (40%)', val: selectedClient.match_details.detailed_report?.watchlist_matches?.[0]?.scores?.name_match || (selectedClient.match_details.score > 70 ? 0.8 : 0.3), color: 'text-blue-600' },
+                              { label: 'Country (20%)', val: selectedClient.match_details.detailed_report?.watchlist_matches?.[0]?.scores?.country_match || (selectedClient.match_details.matchedRecord?.nationality === selectedClient["Company Nationality"] ? 1.0 : 0), color: 'text-emerald-600' },
+                              { label: 'Passport/ID (25%)', val: selectedClient.match_details.detailed_report?.watchlist_matches?.[0]?.scores?.id_match || 0, color: 'text-purple-600' },
+                              { label: 'DOB (10%)', val: selectedClient.match_details.detailed_report?.watchlist_matches?.[0]?.scores?.dob_match || 0, color: 'text-orange-600' },
+                              { label: 'CRN (5%)', val: selectedClient.match_details.detailed_report?.watchlist_matches?.[0]?.scores?.crn_match || 0, color: 'text-slate-600' }
+                           ].map((stat, i) => (
+                              <div key={i} className="bg-white border border-gray-100 p-4 rounded-2xl flex flex-col items-center text-center">
+                                 <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mb-2">{stat.label}</p>
+                                 <div className={`text-sm font-black ${stat.color}`}>{Math.round((stat.val || 0) * 100)}%</div>
+                                 <div className="w-full bg-gray-50 h-1 rounded-full mt-2 overflow-hidden">
+                                    <div className={`h-full ${stat.color.replace('text', 'bg')}`} style={{ width: `${(stat.val || 0) * 100}%` }} />
+                                 </div>
+                              </div>
+                           ))}
+                        </div>
+
+                        {/* Detailed rationale from Gemini if available */}
+                        {selectedClient.match_details.detailed_report?.watchlist_matches?.[0]?.match_rationale && (
+                           <div className="bg-slate-50 rounded-[1.5rem] p-6 space-y-4">
+                              <h5 className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Match Rationale Detail</h5>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                 <div className="flex gap-3">
+                                    <div className="w-1 bg-emerald-500 rounded-full" />
+                                    <div>
+                                       <p className="text-[8px] font-black text-slate-400 uppercase">Name Technique</p>
+                                       <p className="text-[10px] font-bold text-slate-800">{selectedClient.match_details.detailed_report.watchlist_matches[0].match_rationale.name_technique}</p>
+                                    </div>
+                                 </div>
+                                 <div className="flex gap-3">
+                                    <div className="w-1 bg-blue-500 rounded-full" />
+                                    <div>
+                                       <p className="text-[8px] font-black text-slate-400 uppercase">Country Note</p>
+                                       <p className="text-[10px] font-bold text-slate-800">{selectedClient.match_details.detailed_report.watchlist_matches[0].match_rationale.country_note}</p>
+                                    </div>
+                                 </div>
+                                 <div className="flex gap-3">
+                                    <div className="w-1 bg-purple-500 rounded-full" />
+                                    <div>
+                                       <p className="text-[8px] font-black text-slate-400 uppercase">ID Integrity</p>
+                                       <p className="text-[10px] font-bold text-slate-800">{selectedClient.match_details.detailed_report.watchlist_matches[0].match_rationale.id_note}</p>
+                                    </div>
+                                 </div>
+                                 <div className="flex gap-3">
+                                    <div className="w-1 bg-orange-500 rounded-full" />
+                                    <div>
+                                       <p className="text-[8px] font-black text-slate-400 uppercase">Temporal (DOB) Note</p>
+                                       <p className="text-[10px] font-bold text-slate-800">{selectedClient.match_details.detailed_report.watchlist_matches[0].match_rationale.dob_note}</p>
+                                    </div>
+                                 </div>
+                              </div>
+                           </div>
+                        )}
 
                         {selectedClient.match_details.matchedRecord && (
                            <div className="border-t border-gray-100 pt-8 mt-8">
@@ -619,14 +737,6 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                                        {selectedClient.match_details.matchedRecord.nationality} • {selectedClient.match_details.matchedRecord.dateOfBirth || 'N/A'}
                                     </p>
                                  </div>
-                                 <div className="p-5 bg-white border border-gray-100 rounded-2xl">
-                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Registry Reference</p>
-                                    <p className="text-xs font-black text-slate-900">{selectedClient.match_details.matchedRecord.referenceNumber || 'N/A'}</p>
-                                 </div>
-                                 <div className="p-5 bg-white border border-gray-100 rounded-2xl">
-                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">List Type</p>
-                                    <p className="text-xs font-black text-slate-900">{selectedClient.match_details.matchedRecord.unListType || 'UN Consolidated'}</p>
-                                 </div>
                               </div>
                               <div className="mt-3 p-5 bg-red-50/30 border border-red-50 rounded-2xl">
                                  <p className="text-[8px] font-black text-red-400 uppercase tracking-widest mb-1">Registry Comments & Aliases</p>
@@ -643,9 +753,25 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                               </div>
                            </div>
                         )}
-                     </div>
-                  </div>
-               )}
+                    </div>
+                  ) : (
+                    <div className="p-16 text-center space-y-6">
+                       <div className={`w-20 h-20 rounded-[2rem] flex items-center justify-center mx-auto shadow-sm ${selectedClient.lastScreenedAt ? 'bg-indigo-50 text-indigo-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                          {selectedClient.lastScreenedAt ? <ShieldCheck size={40} /> : <CheckCircle2 size={40} />}
+                       </div>
+                       <div className="max-w-md mx-auto space-y-2">
+                          <h4 className="text-xl font-black text-slate-900 uppercase">
+                             {selectedClient.lastScreenedAt ? 'Security Verified' : 'Algorithmic Clear'}
+                          </h4>
+                          <p className="text-xs font-bold text-slate-400 uppercase leading-relaxed">
+                             {selectedClient.lastScreenedAt 
+                               ? 'This entity has been verified against our AI intelligence engine and the global sanctions registry. No threats detected.' 
+                               : 'No exact or fuzzy matches were detected in the primary sanctions registry. You can still run an Advanced AI Scan to perform heuristic and semantic verification.'}
+                          </p>
+                       </div>
+                    </div>
+                  )}
+               </div>
 
                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className={`p-8 rounded-[2rem] border shadow-sm ${

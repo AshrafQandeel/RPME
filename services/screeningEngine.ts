@@ -45,92 +45,119 @@ export const screenClient = (client: Client, sanctions: SanctionEntry[]): MatchR
   const clientNationality = (client["Company Nationality"] || '').toUpperCase();
   const cTokens = clientName.split(/\s+/).filter(t => t.length > 1 && !CORPORATE_NOISE.includes(t));
   
-  let bestMatch = {
+  let bestMatch: {
+    score: number;
+    sanction: SanctionEntry | null;
+    matchType: string;
+    scores?: any;
+  } = {
     score: 0,
     sanction: null as SanctionEntry | null,
     matchType: 'No Match'
   };
 
   for (const entry of sanctions) {
-    let currentScore = 0;
-    const entryFullName = `${entry.firstName} ${entry.secondName} ${entry.thirdName} ${entry.lastName}`.trim().toUpperCase();
+    const entryFullName = [entry.firstName, entry.secondName, entry.thirdName, entry.lastName]
+      .filter(Boolean)
+      .join(' ')
+      .toUpperCase()
+      .replace(/\s+/g, ' ')
+      .trim();
     const sTokens = entryFullName.split(/\s+/).filter(t => t.length > 1 && !CORPORATE_NOISE.includes(t));
 
-    // 1. Direct similarity check
-    const similarity = calculateSimilarity(clientName, entryFullName);
+    // DIMENSION SCORING
     
-    // 2. Token Consensus Check (More robust for multi-part names)
+    // 1. NAME MATCHING (Weight: 40%)
+    const nameSimilarity = calculateSimilarity(clientName, entryFullName);
+    let name_match = nameSimilarity;
+    
+    // Token check for name score boost
     let matchedTokens = 0;
+    const meaningfulTokens = cTokens.length;
     for (const ct of cTokens) {
-      // Threshold 0.70 allows more significant typos (e.g., JAMeL vs JAMAL, ZEINIeE vs ZEINIYE)
-      if (sTokens.some(st => st === ct || calculateSimilarity(ct, st) >= 0.70)) {
+      if (sTokens.some(st => st === ct || calculateSimilarity(ct, st) >= 0.85)) {
         matchedTokens++;
       }
     }
+    const tokenRatio = meaningfulTokens > 0 ? matchedTokens / meaningfulTokens : 0;
+    
+    // If we have a very high token ratio, it's likely a hit
+    if (tokenRatio > name_match) name_match = tokenRatio;
 
-    const tokenRatio = cTokens.length > 0 ? matchedTokens / cTokens.length : 0;
-    const sanctionTokenRatio = sTokens.length > 0 ? matchedTokens / sTokens.length : 0;
-
-    // SCORING LOGIC v24.0 - Aggressive for Typos & Partial Names
-    if (clientName === entryFullName) {
-      currentScore = 98; 
-    } else if (tokenRatio >= 0.90 && sanctionTokenRatio >= 0.80) {
-      currentScore = 95; // High consensus
-    } else if (similarity >= 0.85) {
-      currentScore = 90; // Strong fuzzy match
-    } else if (tokenRatio >= 0.80 && matchedTokens >= 2) {
-      currentScore = 85; // Most user tokens match (Catch typos like JAMeL ZEINIeE)
-    } else if (tokenRatio >= 0.60 && sanctionTokenRatio >= 0.50) {
-      currentScore = 75; // Significant overlap (at least half of sanction record)
-    } else if (tokenRatio >= 0.5 || similarity >= 0.5) {
-      currentScore = 60; // Moderate risk
-    } else if (matchedTokens >= 2) {
-      currentScore = 50; // Multiple name parts matched fuzzy
-    } else if (matchedTokens >= 1 && (cTokens.length <= 1)) {
-      currentScore = 40; // Single token match but it's the only one provided
-    } else if (matchedTokens >= 1 && (sTokens.length <= 2)) {
-      currentScore = 30; // Weak but present
+    // Special case for exact substring match (important for entities like "Special Industries Group")
+    if (clientName.includes(entryFullName) || entryFullName.includes(clientName)) {
+      if (name_match < 0.90) name_match = 0.90;
     }
 
-    // 3. Alias Check
-    if (currentScore < 80 && entry.aliases && entry.aliases.length > 0) {
-      for (const alias of entry.aliases) {
-        const aSimilarity = calculateSimilarity(clientName, alias.toUpperCase());
-        if (aSimilarity >= 0.90) {
-          currentScore = Math.max(currentScore, 85);
-          break;
+    // 2. NATIONALITY / COUNTRY (Weight: 20%)
+    let country_match = 0;
+    if (clientNationality && entry.nationality.toUpperCase().includes(clientNationality)) {
+      country_match = 1.0;
+    }
+
+    // 3. PASSPORT / ID NUMBER (Weight: 20%)
+    let id_match = 0;
+    if (client["QFC No"] && entry.referenceNumber.includes(client["QFC No"])) {
+        id_match = 1.0;
+    }
+
+    // 4. DATE OF BIRTH (Weight: 10%)
+    let dob_match = 0;
+    if (client["Date of QFC Incorporation or Registration"] && entry.dateOfBirth) {
+        if (client["Date of QFC Incorporation or Registration"] === entry.dateOfBirth) {
+            dob_match = 1.0;
+        } else if (client["Date of QFC Incorporation or Registration"].substring(0, 4) === entry.dateOfBirth.substring(0, 4)) {
+            dob_match = 0.3;
         }
-      }
     }
 
-    // 4. Identity Multipliers
-    if (currentScore >= 30) {
-      // Nationality match adds confidence
-      if (clientNationality && entry.nationality.toUpperCase().includes(clientNationality)) {
-        currentScore += 10;
-      }
-      
-      // Entity Type match adds confidence
-      if (client.entity_type === entry.type) {
-        currentScore += 5;
-      }
+    // 5. CRN (Weight: 10%)
+    let crn_match = 0;
+    if (client["QFC No"] && entry.referenceNumber === client["QFC No"]) {
+        crn_match = 1.0;
     }
 
-    if (currentScore > bestMatch.score) {
+    // COMPOSITE SCORING
+    // Name is prioritized - if name match is high, we want hits to surface
+    let composite = (name_match * 0.40) + (country_match * 0.20) + (id_match * 0.20) + (dob_match * 0.10) + (crn_match * 0.10);
+    
+    // AGGRESSIVE OVERRIDE: If the name match is very high, it's very likely a hit regardless of other data
+    if (name_match >= 0.95) {
+      composite = Math.max(composite, 0.95);
+    } else if (name_match >= 0.85) {
+      composite = Math.max(composite, 0.75);
+    }
+    
+    // Risk Classification
+    let risk_classification = "CLEAR";
+    if (composite >= 0.80 || id_match === 1.0 || crn_match === 1.0 || name_match >= 0.95) risk_classification = "CONFIRMED HIT";
+    else if (composite >= 0.50 || name_match >= 0.80 || (name_match >= 0.60 && country_match === 1.0)) risk_classification = "POSSIBLE MATCH";
+    else if (composite >= 0.30 || name_match >= 0.50) risk_classification = "WEAK SIMILARITY";
+
+    const scorePct = composite * 100;
+
+    if (scorePct > bestMatch.score) {
       bestMatch = { 
-        score: Math.min(currentScore, 100), 
+        score: Math.min(scorePct, 100), 
         sanction: entry,
-        matchType: currentScore >= 80 ? 'High Confidence Match' : 
-                   currentScore >= 50 ? 'Probabilistic Match' : 'Possible Match'
+        matchType: risk_classification,
+        scores: {
+            name_match,
+            country_match,
+            id_match,
+            dob_match,
+            crn_match,
+            composite
+        }
       };
     }
   }
 
   // Realistic Risk Assignment
   let riskLevel = RiskLevel.NONE;
-  if (bestMatch.score >= 75) riskLevel = RiskLevel.HIGH;
-  else if (bestMatch.score >= 45) riskLevel = RiskLevel.MEDIUM;
-  else if (bestMatch.score >= 20) riskLevel = RiskLevel.LOW;
+  if (bestMatch.matchType === "CONFIRMED HIT") riskLevel = RiskLevel.HIGH;
+  else if (bestMatch.matchType === "POSSIBLE MATCH") riskLevel = RiskLevel.MEDIUM;
+  else if (bestMatch.matchType === "WEAK SIMILARITY") riskLevel = RiskLevel.LOW;
 
   if (bestMatch.sanction && riskLevel !== RiskLevel.NONE) {
     return {

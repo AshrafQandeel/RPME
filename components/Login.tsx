@@ -29,7 +29,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, isCloudConnected }) => {
     const normalizedPassword = password.trim();
 
     // v2.7.0: Root Administrator Bypass (Updated for ashraf.qandeel@rpmefirm.com)
-    const isRootBypass = (normalizedEmail === 'aqandeel@gmail.com' && normalizedPassword === 'Rodl@2026') || 
+    const isRootBypass = (normalizedEmail === 'aqandeel@gmail.com' && normalizedPassword === 'RPME Limited @2026') || 
                          (normalizedEmail === 'ashraf.qandeel@rpmefirm.com' && normalizedPassword === 'Gaza@2026');
 
     if (isRootBypass) {
@@ -152,7 +152,7 @@ const Login: React.FC<LoginProps> = ({ onLogin, isCloudConnected }) => {
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.25em] ml-3">Compliance ID</label>
                   <div className="relative">
                     <Mail className="absolute left-7 top-1/2 -translate-y-1/2 text-gray-300" size={18} />
-                    <input type="email" required className="w-full bg-gray-50/50 border-2 border-transparent focus:border-emerald-800 focus:bg-white rounded-[1.5rem] py-6 pl-16 pr-8 outline-none transition-all font-black text-gray-700 text-sm shadow-sm" placeholder="user@rodlme.com" value={email} onChange={(e) => setEmail(e.target.value)}/>
+                    <input type="email" required className="w-full bg-gray-50/50 border-2 border-transparent focus:border-emerald-800 focus:bg-white rounded-[1.5rem] py-6 pl-16 pr-8 outline-none transition-all font-black text-gray-700 text-sm shadow-sm" placeholder="user@rpmefirm.com" value={email} onChange={(e) => setEmail(e.target.value)}/>
                   </div>
                 </div>
                 <div className="space-y-2">

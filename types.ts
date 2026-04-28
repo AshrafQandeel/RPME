@@ -79,6 +79,44 @@ export interface SanctionEntry {
   fetchDate?: string;
 }
 
+export interface MatchScores {
+  name_match: number;
+  country_match: number;
+  id_match: number;
+  dob_match: number;
+  crn_match: number;
+  composite: number;
+}
+
+export interface MatchRationale {
+  name_technique: string;
+  name_similarity_detail: string;
+  country_note: string;
+  id_note: string;
+  dob_note: string;
+}
+
+export interface WatchlistMatch {
+  watchlist_entry: string;
+  list_source: string;
+  scores: MatchScores;
+  match_rationale: MatchRationale;
+  risk_classification: string;
+  recommended_action: string;
+  similar_to: string;
+  confidence: string;
+}
+
+export interface DetailedMatchReport {
+  screening_id: string;
+  screened_at: string;
+  new_client: any;
+  watchlist_matches: WatchlistMatch[];
+  overall_result: string;
+  overall_recommended_action: string;
+  screener_notes: string;
+}
+
 export interface MatchResult {
   clientId: string;
   sanctionId: string;
@@ -87,6 +125,7 @@ export interface MatchResult {
   matchedFields: string[];
   matchedRecord?: SanctionEntry;
   timestamp: string;
+  detailed_report?: DetailedMatchReport;
 }
 
 export interface ScreeningProgress {
