@@ -24,7 +24,7 @@ const INITIAL_FORM_STATE: any = {
   "Nature of Business": "", "Registered Address": "", "Telephone Number": "", "E Mail": "",
   "Website": "", "Directors Names": [], "Significant Shareholders": [], "UBO Details": [],
   "Authorized Signatory": [], "Secretary": "", "Senior Executive Function": "",
-  "Approved Auditor": "", "Company Type": "", "kyc_status": KYCStatus.DRAFT, "entity_type": EntityType.CORPORATE
+  "Approved Auditor": "", "Company Type": "", "kyc_status": KYCStatus.DRAFT, "entity_type": EntityType.CORPORATE, "document_count": 0
 };
 
 interface FormSectionProps {
@@ -313,7 +313,9 @@ const ClientManager: React.FC<ClientManagerProps> = ({
 
   const openProvisionModal = () => {
     setEditMode(false);
-    setFormData({ ...INITIAL_FORM_STATE });
+    // Generate the final ID for the new entity immediately to support document folder consistency
+    const finalId = `RPME-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    setFormData({ ...INITIAL_FORM_STATE, id: finalId });
     setFormErrors([]);
     setIsModalOpen(true);
   };
@@ -353,7 +355,6 @@ const ClientManager: React.FC<ClientManagerProps> = ({
         const initialStatus = isDataEntry ? KYCStatus.PENDING_REVIEW : KYCStatus.DRAFT;
         const newClient: Client = { 
           ...formData, 
-          id: `RPME-${Math.random().toString(36).substr(2, 6).toUpperCase()}`, 
           created_at: new Date().toISOString(), 
           created_by: currentUserId, 
           kyc_status: initialStatus,
@@ -626,7 +627,12 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                  </div>
                  <div className="flex flex-col gap-3">
                     <button 
-                      onClick={() => { setShowDocWarning(false); setClientForDocuments(pendingCommitClient || formData as Client); setIsDocumentModalOpen(true); }} 
+                      onClick={() => { 
+                        const targetClient = pendingCommitClient || formData as Client;
+                        setClientForDocuments(targetClient); 
+                        setIsDocumentModalOpen(true);
+                        setShowDocWarning(false); 
+                      }} 
                       className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg shadow-indigo-200"
                     >
                       <Upload size={16} /> Upload Documents
@@ -653,6 +659,12 @@ const ClientManager: React.FC<ClientManagerProps> = ({
             onUpdateClient(updated);
             if (selectedClient && selectedClient.id === updated.id) {
               setSelectedClient(updated);
+            }
+            if (pendingCommitClient && pendingCommitClient.id === updated.id) {
+              setPendingCommitClient(updated);
+            }
+            if (formData && formData.id === updated.id) {
+              setFormData(updated);
             }
           }}
         />

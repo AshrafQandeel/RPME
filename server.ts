@@ -5,15 +5,6 @@ import axios from 'axios';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import cookieParser from 'cookie-parser';
-import multer from 'multer';
-import { 
-  createOAuth2Client, 
-  getDriveClient, 
-  getOrCreateClientFolder, 
-  listClientDocuments, 
-  uploadFileToFolder, 
-  deleteFile 
-} from './services/googleDriveService';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,153 +15,6 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 app.use(cookieParser());
-
-const upload = multer({ storage: multer.memoryStorage() });
-
-// --- Google OAuth Routes ---
-
-app.get('/api/auth/google/url', (req, res) => {
-  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const host = req.headers['x-forwarded-host'] || req.get('host');
-  const redirectUri = `${protocol}://${host}/auth/google/callback`;
-  
-  const oauth2Client = createOAuth2Client(redirectUri);
-  const url = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: [
-      'https://www.googleapis.com/auth/drive.file',
-      'https://www.googleapis.com/auth/userinfo.email'
-    ],
-    prompt: 'consent'
-  });
-  res.json({ url });
-});
-
-app.get(['/auth/google/callback', '/auth/google/callback/'], async (req, res) => {
-  const code = req.query.code as string;
-  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const host = req.headers['x-forwarded-host'] || req.get('host');
-  const redirectUri = `${protocol}://${host}/auth/google/callback`;
-
-  try {
-    const oauth2Client = createOAuth2Client(redirectUri);
-    const { tokens } = await oauth2Client.getToken(code);
-    
-    // Set tokens in a secure cookie
-    res.cookie('google_tokens', JSON.stringify(tokens), {
-      httpOnly: true,
-      secure: true,
-      sameSite: 'none',
-      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
-    });
-
-    res.send(`
-      <html>
-        <body>
-          <script>
-            if (window.opener) {
-              window.opener.postMessage({ type: 'OAUTH_AUTH_SUCCESS' }, '*');
-              window.close();
-            } else {
-              window.location.href = '/';
-            }
-          </script>
-          <p>Authentication successful. You can close this window.</p>
-        </body>
-      </html>
-    `);
-  } catch (error: any) {
-    console.error('Google OAuth Error:', error);
-    res.status(500).send('Authentication failed');
-  }
-});
-
-app.get('/api/auth/google/status', (req, res) => {
-  const tokens = req.cookies.google_tokens;
-  res.json({ authenticated: !!tokens });
-});
-
-app.post('/api/auth/google/logout', (req, res) => {
-  res.clearCookie('google_tokens', {
-    httpOnly: true,
-    secure: true,
-    sameSite: 'none'
-  });
-  res.json({ success: true });
-});
-
-// --- Google Drive API Routes ---
-
-const getDriveFromReq = (req: any) => {
-  const tokenStr = req.cookies.google_tokens;
-  if (!tokenStr) throw new Error('NOT_AUTHENTICATED');
-  const tokens = JSON.parse(tokenStr);
-  return getDriveClient(tokens);
-};
-
-app.get('/api/drive/list/:clientId', async (req: any, res) => {
-  try {
-    const drive = getDriveFromReq(req);
-    const { clientId } = req.params;
-    const clientName = req.query.name as string || 'Unknown';
-    
-    // Use the folder ID from the request if provided, otherwise find/create
-    let folderId = req.query.folderId as string;
-    if (!folderId || folderId === 'undefined') {
-      folderId = await getOrCreateClientFolder(drive, clientId, clientName);
-    }
-
-    const files = await listClientDocuments(drive, folderId);
-    res.json({ folderId, files });
-  } catch (error: any) {
-    console.error('Drive List Error:', error);
-    if (error.message === 'NOT_AUTHENTICATED') {
-      return res.status(401).json({ error: 'Please connect your Google Drive' });
-    }
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.post('/api/drive/upload/:clientId', upload.array('files'), async (req: any, res) => {
-  try {
-    const drive = getDriveFromReq(req);
-    const { clientId } = req.params;
-    const clientName = req.body.clientName || 'Unknown';
-    const folderId = req.body.folderId || await getOrCreateClientFolder(drive, clientId, clientName);
-    
-    const files = req.files as Express.Multer.File[];
-    const uploadResults = [];
-
-    for (const file of files) {
-      const result = await uploadFileToFolder(
-        drive,
-        folderId,
-        file.originalname,
-        file.mimetype,
-        file.buffer,
-        req.body.description
-      );
-      uploadResults.push(result);
-    }
-
-    res.json({ success: true, folderId, files: uploadResults });
-  } catch (error: any) {
-    console.error('Drive Upload Error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-app.delete('/api/drive/files/:fileId', async (req: any, res) => {
-  try {
-    const drive = getDriveFromReq(req);
-    const { fileId } = req.params;
-    await deleteFile(drive, fileId);
-    res.json({ success: true });
-  } catch (error: any) {
-    console.error('Drive Delete Error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // Proxy endpoint to bypass CORS for sanctions lists
 app.get('/api/proxy', async (req, res) => {
@@ -208,6 +52,14 @@ app.get('/api/health', (req, res) => {
     status: 'ok', 
     timestamp: new Date().toISOString(), 
     env: process.env.NODE_ENV
+  });
+});
+
+// Serve Supabase config to client
+app.get('/api/config/supabase', (req, res) => {
+  res.json({
+    supabaseUrl: process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL,
+    supabaseKey: process.env.VITE_SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANO || process.env.SUPABASE_ANON_KEY
   });
 });
 

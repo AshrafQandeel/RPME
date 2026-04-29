@@ -24,8 +24,10 @@ import {
   logIngestionEvent,
   fetchGlobalEnvironment,
   setGlobalEnvironment,
-  subscribeToGlobalEnvironment
+  subscribeToGlobalEnvironment,
+  deleteCloudUser
 } from './services/cloudDb';
+import { deleteClientDocuments } from './services/storageService';
 import { OFFICIAL_UN_XML_URL, QATAR_NCTC_PORTAL_URL, fetchAndNormalize } from './services/unSanctionsService';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
@@ -362,9 +364,15 @@ const App: React.FC = () => {
   const handleDeleteClient = async (id: string) => {
     setIsRefreshingClients(true);
     try {
+      // 1. Delete associated documents from storage first
+      await deleteClientDocuments(id);
+      
+      // 2. Delete client record from database
       await deleteCloudClient(id);
+      
       await refreshClients(currentClientsPage);
     } catch (e: any) { 
+      console.error("[App] Client Deletion Failure:", e);
       setConnectionStatus('SAFE_MODE');
     } finally { setIsRefreshingClients(false); }
   };
@@ -372,10 +380,19 @@ const App: React.FC = () => {
   const handleUpdateClient = async (updatedClient: Client) => {
     try {
       await upsertCloudClient(updatedClient);
-      setClients(prev => prev.map(c => c.id === updatedClient.id ? { ...updatedClient } : c));
+      setClients(prev => {
+        const existingIndex = prev.findIndex(c => c.id === updatedClient.id);
+        if (existingIndex !== -1) {
+          const next = [...prev];
+          next[existingIndex] = { ...updatedClient };
+          return next;
+        }
+        return [updatedClient, ...prev];
+      });
       const nextRisks = await fetchGlobalRiskCounts();
       setRiskSummary(nextRisks);
     } catch (e: any) { 
+      console.error("[App] Client Update Failure:", e);
       setConnectionStatus('SAFE_MODE');
     }
   };

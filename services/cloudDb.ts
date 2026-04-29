@@ -213,7 +213,8 @@ export const fetchCloudClients = async (from: number, to: number, userRole?: str
     matches: row.matches || [],
     match_details: row.match_details || null,
     lastScreenedAt: row.last_screened_at || row.lastScreenedAt,
-    entity_type: row.entity_type as EntityType
+    entity_type: row.entity_type as EntityType,
+    document_count: row.document_count || 0
   } as Client));
 };
 
@@ -297,7 +298,8 @@ export const upsertCloudClient = async (client: Client) => {
     matches: client.matches,
     match_details: client.match_details,
     last_screened_at: client.lastScreenedAt,
-    entity_type: client.entity_type
+    entity_type: client.entity_type,
+    document_count: client.document_count || 0
   };
 
   const { error } = await supabaseClient.from('clients').upsert([dbRecord], { onConflict: 'id' });
@@ -527,7 +529,7 @@ export const validateRegistrySchemaV431 = async () => {
   // Check for critical columns in clients table
   const criticalColumns = [
     'directors', 'shareholders', 'ubo_details', 'signatories', 
-    'file_no', 'qfc_no', 'kyc_status', 'risk_level', 'last_screened_at'
+    'file_no', 'qfc_no', 'kyc_status', 'risk_level', 'last_screened_at', 'document_count'
   ];
   
   // Test for columns by attempting a minimal select

@@ -8,12 +8,11 @@ import {
 } from 'lucide-react';
 import { Client, ClientDocument } from '../types';
 import { 
-  getGoogleAuthUrl, 
-  checkGoogleAuthStatus, 
   listDocuments, 
-  uploadDocuments, 
-  deleteDocument 
-} from '../services/googleDriveClient';
+  uploadDocument, 
+  deleteDocument,
+  ensureBucketExists
+} from '../services/storageService';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface DocumentUploadModalProps {
@@ -29,90 +28,61 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
   client,
   onUpdateClient
 }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [documents, setDocuments] = useState<ClientDocument[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
-  const [folderId, setFolderId] = useState<string | undefined>(client.google_drive_folder_id);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [configMissing, setConfigMissing] = useState(false);
+
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      checkAuth();
+      const init = async () => {
+        setIsInitializing(true);
+        setError(null);
+        setConfigMissing(false);
+        setConfirmDeleteId(null);
+        try {
+          await ensureBucketExists();
+          await loadDocuments();
+        } catch (e: any) {
+          if (e.message.includes('configuration missing') || e.message.includes('credentials not configured')) {
+            setConfigMissing(true);
+          } else {
+            setError(e.message || 'Storage initialization failed');
+          }
+        } finally {
+          setIsInitializing(false);
+        }
+      };
+      init();
     }
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (isAuthenticated && isOpen && client.id) {
-      loadDocuments();
-    }
-  }, [isAuthenticated, isOpen, client.id]);
-
-  const checkAuth = async () => {
-    try {
-      const { authenticated } = await checkGoogleAuthStatus();
-      setIsAuthenticated(authenticated);
-    } catch (err) {
-      setIsAuthenticated(false);
-    }
-  };
+  }, [isOpen, client.id]);
 
   const loadDocuments = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const result = await listDocuments(client.id, client["Client Name"], folderId);
-      setDocuments(result.files);
-      setFolderId(result.folderId);
+      const docs = await listDocuments(client.id);
+      setDocuments(docs as any);
       
-      // Update client if folderId changed
-      if (result.folderId !== client.google_drive_folder_id) {
+      // Update client document count if needed (simplified)
+      if (docs.length !== client.document_count) {
         onUpdateClient({ 
           ...client, 
-          google_drive_folder_id: result.folderId,
-          document_count: result.files.length 
+          document_count: docs.length 
         });
       }
     } catch (err: any) {
       setError(err.message);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleConnect = async () => {
-    try {
-      const { url } = await getGoogleAuthUrl();
-      const width = 600;
-      const height = 700;
-      const left = window.screenX + (window.outerWidth - width) / 2;
-      const top = window.screenY + (window.outerHeight - height) / 2;
-      
-      const authWindow = window.open(
-        url,
-        'google_oauth',
-        `width=${width},height=${height},left=${left},top=${top}`
-      );
-
-      if (!authWindow) {
-        alert('Popup blocked! Please allow popups to connect Google Drive.');
-        return;
-      }
-
-      const handleMessage = (event: MessageEvent) => {
-        if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
-          setIsAuthenticated(true);
-          window.removeEventListener('message', handleMessage);
-        }
-      };
-
-      window.addEventListener('message', handleMessage);
-    } catch (err: any) {
-      setError('Failed to initiate auth: ' + err.message);
     }
   };
 
@@ -147,13 +117,23 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
     setUploadProgress(10);
     
     try {
-      await uploadDocuments(client.id, client["Client Name"], files, folderId);
+      for (const file of files) {
+        await uploadDocument(client.id, file);
+      }
       setUploadProgress(100);
+      
+      // Load and update parent immediately
+      const docs = await listDocuments(client.id);
+      setDocuments(docs as any);
+      onUpdateClient({ 
+        ...client, 
+        document_count: docs.length 
+      });
+
       setTimeout(() => {
         setIsUploading(false);
         setUploadProgress(0);
-        loadDocuments();
-      }, 500);
+      }, 800);
     } catch (err: any) {
       setError(err.message);
       setIsUploading(false);
@@ -161,25 +141,30 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
   };
 
   const handleDelete = async (fileId: string) => {
-    if (!confirm('Are you sure you want to delete this document?')) return;
-    
+    console.log("[Storage] Initiating deletion for:", fileId);
     try {
       await deleteDocument(fileId);
-      setDocuments(prev => prev.filter(d => d.id !== fileId));
+      console.log("[Storage] Deletion successful for:", fileId);
+      const updatedDocs = documents.filter(d => d.id !== fileId);
+      setDocuments(updatedDocs);
+      setConfirmDeleteId(null);
       onUpdateClient({ 
         ...client, 
-        document_count: Math.max(0, (client.document_count || 1) - 1) 
+        document_count: updatedDocs.length 
       });
     } catch (err: any) {
+      console.error("[Storage] Deletion failure:", err);
       setError(err.message);
+      setConfirmDeleteId(null);
     }
   };
 
-  const getFileIcon = (mimeType: string) => {
-    if (mimeType.includes('pdf')) return <FileText className="w-8 h-8 text-red-500" />;
-    if (mimeType.includes('image')) return <ImageIcon className="w-8 h-8 text-blue-500" />;
-    if (mimeType.includes('word') || mimeType.includes('officedocument')) return <File className="w-8 h-8 text-blue-700" />;
-    if (mimeType.includes('sheet') || mimeType.includes('excel')) return <FileCode className="w-8 h-8 text-green-600" />;
+  const getFileIcon = (type: string) => {
+    const t = type.toLowerCase();
+    if (t.includes('pdf')) return <FileText className="w-8 h-8 text-red-500" />;
+    if (t.includes('image')) return <ImageIcon className="w-8 h-8 text-blue-500" />;
+    if (t.includes('word') || t.includes('officedocument')) return <File className="w-8 h-8 text-blue-700" />;
+    if (t.includes('sheet') || t.includes('excel')) return <FileCode className="w-8 h-8 text-green-600" />;
     return <File className="w-8 h-8 text-gray-400" />;
   };
 
@@ -193,7 +178,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[400] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
       <motion.div 
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -216,26 +201,36 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {isAuthenticated === null ? (
+          {isInitializing ? (
             <div className="flex flex-col items-center justify-center py-20">
               <Loader2 className="w-10 h-10 text-indigo-600 animate-spin mb-4" />
-              <p className="text-gray-600 font-medium font-mono text-sm">Validating Cloud Connection...</p>
+              <p className="text-gray-600 font-medium font-mono text-sm uppercase tracking-widest">Bridging Supabase Storage...</p>
             </div>
-          ) : !isAuthenticated ? (
+          ) : configMissing ? (
             <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="w-16 h-16 bg-indigo-50 flex items-center justify-center rounded-2xl mb-4">
-                <CloudUpload className="w-8 h-8 text-indigo-600" />
+              <div className="w-16 h-16 bg-amber-50 flex items-center justify-center rounded-2xl mb-6">
+                <AlertCircle className="w-8 h-8 text-amber-600" />
               </div>
-              <h3 className="text-lg font-bold text-gray-900 mb-2">Connect to Google Drive</h3>
-              <p className="text-gray-500 max-w-sm mb-6">
-                To manage documents for this entity, you need to authorize access to the shared Google Drive folder.
+              <h3 className="text-xl font-black text-gray-900 mb-4 tracking-tight uppercase">Supabase Connection Required</h3>
+              <p className="text-gray-600 max-w-md mb-8 leading-relaxed">
+                To move your storage to Supabase, you must provide your project credentials in the <span className="font-bold text-indigo-600">Settings</span> menu.
               </p>
-              <button 
-                onClick={handleConnect}
-                className="px-6 py-3 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-lg shadow-indigo-200"
-              >
-                Connect Google Account
-              </button>
+              
+              <div className="bg-gray-50 border border-gray-100 rounded-2xl p-6 text-left w-full max-w-sm space-y-4">
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Step 1: Get Keys</p>
+                  <p className="text-sm text-gray-700">Go to <span className="font-mono bg-white px-1 border rounded text-xs">Project Settings -{">"} API</span> in Supabase.</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Step 2: Update Settings</p>
+                  <p className="text-sm text-gray-700">Add <span className="font-mono bg-white px-1 border rounded text-xs">VITE_SUPABASE_URL</span> and <span className="font-mono bg-white px-1 border rounded text-xs">VITE_SUPABASE_ANON_KEY</span> to the Settings menu.</p>
+                </div>
+                <div className="pt-2">
+                  <p className="text-xs text-amber-700 bg-amber-100/50 p-3 rounded-lg border border-amber-100 font-medium leading-snug">
+                    Note: Changes to environment variables require a page refresh to take effect.
+                  </p>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="space-y-6">
@@ -267,19 +262,28 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                   )}
                 </div>
                 <p className="text-sm font-bold text-gray-900">Click to upload or drag and drop</p>
-                <p className="text-xs text-gray-500 mt-1">PDF, DOCX, XLSX, Images (Max 20MB)</p>
+                <p className="text-xs text-gray-500 mt-1">PDF, DOCX, XLSX, Images (Max 50MB)</p>
                 
-                {isUploading && (
-                  <div className="mt-4 w-full max-w-xs">
-                    <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden">
+                {isUploading ? (
+                  <div className="mt-4 w-full max-w-xs transition-all">
+                    <div className="flex justify-between items-center mb-1">
+                      <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest italic animate-pulse">Syncing to Bucket...</span>
+                      <span className="text-[10px] font-black text-indigo-600">{uploadProgress}%</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-gray-200 rounded-full overflow-hidden shadow-inner">
                       <motion.div 
                         initial={{ width: 0 }}
                         animate={{ width: `${uploadProgress}%` }}
-                        className="h-full bg-indigo-600"
+                        className="h-full bg-indigo-600 shadow-[0_0_10px_rgba(79,70,229,0.5)]"
                       />
                     </div>
                   </div>
-                )}
+                ) : uploadProgress === 100 ? (
+                  <div className="mt-4 flex items-center gap-2 text-emerald-600 animate-in fade-in zoom-in-95">
+                    <CheckCircle2 className="w-5 h-5" />
+                    <span className="text-xs font-bold">Documents Successfully Stored</span>
+                  </div>
+                ) : null}
               </div>
 
               {/* Error Alert */}
@@ -287,7 +291,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                 <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3">
                   <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
                   <div className="text-sm">
-                    <p className="font-bold text-red-900">Integration Error</p>
+                    <p className="font-bold text-red-900">Storage Error</p>
                     <p className="text-red-700">{error}</p>
                   </div>
                 </div>
@@ -298,7 +302,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
                     <FileText className="w-4 h-4 text-indigo-500" />
-                    Uploaded Documents ({documents.length})
+                    Secure Bucket Vault ({documents.length})
                   </h3>
                   {isLoading && <Loader2 className="w-4 h-4 text-indigo-600 animate-spin" />}
                 </div>
@@ -307,7 +311,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                   {documents.length === 0 && !isLoading && (
                     <div className="flex flex-col items-center justify-center py-10 bg-gray-50 rounded-2xl border border-dotted">
                       <AlertTriangle className="w-8 h-8 text-amber-400 mb-2" />
-                      <p className="text-sm text-gray-500">No documents found for this client.</p>
+                      <p className="text-sm text-gray-500">No documents found in Supabase storage for this entity.</p>
                     </div>
                   )}
 
@@ -321,38 +325,54 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
                         className="group flex items-center gap-4 p-4 bg-white border border-gray-100 rounded-xl hover:border-indigo-200 hover:shadow-md transition-all"
                       >
                         <div className="shrink-0">
-                          {getFileIcon(doc.mimeType)}
+                          {getFileIcon(doc.type)}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-bold text-gray-900 truncate">{doc.name}</p>
                           <p className="text-xs text-gray-500 flex items-center gap-2">
-                            {formatSize(doc.size)} • {new Date(doc.createdTime).toLocaleDateString()}
+                            {formatSize(doc.size)} • {new Date(doc.createdAt).toLocaleDateString()}
                           </p>
                         </div>
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <a 
-                            href={doc.webViewLink} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 hover:text-indigo-600 transition-colors"
-                            title="View inline"
-                          >
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                          <a 
-                            href={doc.webContentLink} 
-                            className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 hover:text-green-600 transition-colors"
-                            title="Download"
-                          >
-                            <Download className="w-4 h-4" />
-                          </a>
-                          <button 
-                            onClick={() => handleDelete(doc.id)}
-                            className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600 transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                        <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                          {confirmDeleteId === doc.id ? (
+                            <div className="flex items-center gap-1 bg-red-50 p-1 rounded-lg animate-in fade-in zoom-in-95">
+                              <span className="text-[8px] font-black text-red-600 uppercase px-1">Confirm?</span>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleDelete(doc.id); }}
+                                className="p-1.5 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(null); }}
+                                className="p-1.5 bg-gray-200 text-gray-600 rounded-md hover:bg-gray-300 transition-colors"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <a 
+                                href={doc.url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-indigo-600 transition-colors"
+                                title="View / Download"
+                              >
+                                <ExternalLink className="w-4 h-4" />
+                              </a>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setConfirmDeleteId(doc.id);
+                                }}
+                                className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600 transition-colors"
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </motion.div>
                     ))}
@@ -365,7 +385,7 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
 
         {/* Footer */}
         <div className="px-6 py-4 bg-gray-50/50 border-top flex justify-between items-center">
-          <p className="text-xs text-gray-400 font-mono italic">Google Drive Integration Active</p>
+          <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">Supabase Storage Integrated</p>
           <button 
             onClick={onClose}
             className="px-6 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-colors"

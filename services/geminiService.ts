@@ -70,12 +70,12 @@ Return valid JSON matching the structure.
 `;
 
 export async function performAdvancedScreening(client: Client, sanEntries: SanctionEntry[]): Promise<DetailedMatchReport | null> {
-  const rawKey = process.env.My_API_KEY || process.env.GEMINI_API_KEY || "";
+  const rawKey = process.env.GEMINI_API_KEY || "";
   const apiKey = rawKey.trim().replace(/^["']|["']$/g, "").trim();
 
   if (!apiKey || apiKey === "AI Studio Free Tier") {
     console.error("[AI-SCREEN] CRITICAL: API key is missing or set to placeholder.");
-    throw new Error("Configuration Error: The Gemini API key is missing. Please ensure 'My_API_KEY' or 'GEMINI_API_KEY' is set correctly in project Secrets.");
+    throw new Error("Configuration Error: The Gemini API key is missing. Please ensure 'GEMINI_API_KEY' is set correctly in project Secrets.");
   }
 
   const ai = new GoogleGenAI({ apiKey });
