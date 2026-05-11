@@ -141,20 +141,33 @@ export const DocumentUploadModal: React.FC<DocumentUploadModalProps> = ({
   };
 
   const handleDelete = async (fileId: string) => {
-    console.log("[Storage] Initiating deletion for:", fileId);
+    console.log("[Storage] Initiating deletion for path:", fileId);
+    setError(null);
+
+    // Final sanity check
+    if (!confirmDeleteId && !window.confirm("Are you sure you want to permanently delete this document?")) {
+      return;
+    }
+
     try {
-      await deleteDocument(fileId);
-      console.log("[Storage] Deletion successful for:", fileId);
-      const updatedDocs = documents.filter(d => d.id !== fileId);
-      setDocuments(updatedDocs);
-      setConfirmDeleteId(null);
-      onUpdateClient({ 
-        ...client, 
-        document_count: updatedDocs.length 
-      });
+      const success = await deleteDocument(fileId);
+      if (success) {
+        console.log("[Storage] Deletion successful for:", fileId);
+        const updatedDocs = documents.filter(d => d.id !== fileId);
+        setDocuments(updatedDocs);
+        setConfirmDeleteId(null);
+        
+        // Push update to parent state immediately
+        onUpdateClient({ 
+          ...client, 
+          document_count: updatedDocs.length 
+        });
+      } else {
+        throw new Error("Deletion reported as successful but file may still exist.");
+      }
     } catch (err: any) {
       console.error("[Storage] Deletion failure:", err);
-      setError(err.message);
+      setError(`Deletion Failed: ${err.message || 'Unknown storage error'}`);
       setConfirmDeleteId(null);
     }
   };

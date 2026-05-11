@@ -75,7 +75,7 @@ app.post('/api/screening/advanced', async (req, res) => {
     }
 
     // Dynamic import to Gemini Service
-    const { performAdvancedScreening } = await import('./services/geminiService');
+    const { performAdvancedScreening } = await import('./services/geminiService.js');
     
     console.log('[Server] Executing AI Analysis...');
     const report = await performAdvancedScreening(client, potentialMatches || []);
@@ -88,6 +88,21 @@ app.post('/api/screening/advanced', async (req, res) => {
       error: error.message || 'An error occurred during screening',
       type: 'AI_SCREENING_ERROR'
     });
+  }
+});
+
+// Database Keep-Alive API
+app.get('/api/database/keep-alive', async (req, res) => {
+  try {
+    const { performKeepAlive } = await import('./services/keepAliveService.js');
+    const success = await performKeepAlive();
+    res.json({ 
+      status: success ? 'success' : 'failed', 
+      timestamp: new Date().toISOString(),
+      message: success ? 'Database activity simulated successfully' : 'Failed to reach database'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -127,8 +142,16 @@ app.get('*all', (req, res) => {
 
 // Only start the server if we're not in a Vercel environment
 if (process.env.VERCEL !== '1') {
-  app.listen(PORT, '0.0.0.0', () => {
+  app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
+    
+    // Start Supabase keep-alive job
+    try {
+      const { startKeepAliveJob } = await import('./services/keepAliveService.js');
+      startKeepAliveJob();
+    } catch (err) {
+      console.error('[Server] Failed to start Keep-Alive job:', err);
+    }
   });
 }
 

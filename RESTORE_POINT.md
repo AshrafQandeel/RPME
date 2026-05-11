@@ -3,8 +3,10 @@
 ## Current Working State
 - **Architecture**: Full-stack (Express + Vite).
 - **AI Logic**: Server-side proxy via `/api/screening/advanced`.
-- **Model**: `gemini-3-flash-preview` via `@google/genai` (SDK v1.x).
-- **Key Configuration**: Supports both `My_API_KEY` (User-provided) and `GEMINI_API_KEY` (Managed).
+- **Model**: `gemini-3-flash-preview` (Standard) via `@google/genai` (SDK v1.x).
+- **Rate Limiting**: Implemented exponential backoff retry logic (3 retries).
+- **Keep-Alive**: Automated background background database activity pings every 12 hours to prevent Supabase project pausing.
+- **Key Configuration**: Supports `MY_GEMINI_API_KEY` (User-provided) with fixed fallback to `GEMINI_API_KEY`.
 - **API Security**: Keys are stored on the server and never leaked to the client (Vite `define` removed for security).
 
 ## Critical Implementation Details

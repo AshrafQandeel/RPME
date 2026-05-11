@@ -269,7 +269,8 @@ const ClientManager: React.FC<ClientManagerProps> = ({
     if (!selectedClient || isSubmitting) return;
 
     // Document warning logic
-    if (!selectedClient.document_count && !showDocWarning) {
+    const docCount = selectedClient.document_count || 0;
+    if (docCount === 0 && !showDocWarning) {
       setPendingCommitClient(selectedClient);
       setShowDocWarning(true);
       return;
@@ -333,7 +334,8 @@ const ClientManager: React.FC<ClientManagerProps> = ({
     if (isSubmitting) return;
 
     // Check for documents if committing
-    if (!editMode && !formData.document_count && !showDocWarning) {
+    const docCount = formData.document_count || 0;
+    if (!editMode && docCount === 0 && !showDocWarning) {
       setShowDocWarning(true);
       return;
     }
@@ -509,15 +511,15 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                   </td>
                   <td className="px-6 sm:px-10 py-5 sm:py-6">
                     <div className="flex items-center gap-2">
-                       {client.document_count ? (
-                         <div className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100">
+                       {(client.document_count || 0) > 0 ? (
+                         <div className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md border border-emerald-100 shadow-sm animate-in fade-in zoom-in-95">
                            <FileCheck size={12} />
                            <span className="text-[9px] font-black">{client.document_count} FILES</span>
                          </div>
                        ) : (
-                         <div className="flex items-center gap-1.5 text-red-500 bg-red-50 px-2 py-1 rounded-md border border-red-100">
+                         <div className="flex items-center gap-1.5 text-red-500 bg-red-50 px-2 py-1 rounded-md border border-red-100 shadow-sm">
                            <AlertCircle size={12} />
-                           <span className="text-[9px] font-black uppercase tracking-tighter">MISSING</span>
+                           <span className="text-[9px] font-black uppercase tracking-tighter">MISSING Docs</span>
                          </div>
                        )}
                        <button 

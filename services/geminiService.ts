@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Client, SanctionEntry, DetailedMatchReport } from "../types";
+import { Client, SanctionEntry, DetailedMatchReport } from "../types.js";
 
 const SYSTEM_PROMPT = `
 ## ROLE
@@ -70,12 +70,12 @@ Return valid JSON matching the structure.
 `;
 
 export async function performAdvancedScreening(client: Client, sanEntries: SanctionEntry[]): Promise<DetailedMatchReport | null> {
-  const rawKey = process.env.GEMINI_API_KEY || "";
+  const rawKey = process.env.MY_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "";
   const apiKey = rawKey.trim().replace(/^["']|["']$/g, "").trim();
 
   if (!apiKey || apiKey === "AI Studio Free Tier") {
     console.error("[AI-SCREEN] CRITICAL: API key is missing or set to placeholder.");
-    throw new Error("Configuration Error: The Gemini API key is missing. Please ensure 'GEMINI_API_KEY' is set correctly in project Secrets.");
+    throw new Error("Configuration Error: The Gemini API key is missing. Please ensure 'MY_GEMINI_API_KEY' or 'GEMINI_API_KEY' is set correctly in project Secrets.");
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -113,38 +113,47 @@ export async function performAdvancedScreening(client: Client, sanEntries: Sanct
   4. If no match is found, set result to "CLEAR".
   `;
 
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [
-        { role: 'user', parts: [{ text: prompt }] }
-      ],
-      config: {
-        systemInstruction: SYSTEM_PROMPT,
-        temperature: 0.1,
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            overall_result: { type: Type.STRING },
-            overall_recommended_action: { type: Type.STRING },
-            screener_notes: { type: Type.STRING },
-            watchlist_matches: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  watchlist_entry: { type: Type.STRING },
-                  list_source: { type: Type.STRING },
-                  scores: {
-                    type: Type.OBJECT,
-                    properties: {
-                      name_match: { type: Type.NUMBER },
-                      country_match: { type: Type.NUMBER },
-                      id_match: { type: Type.NUMBER },
-                      dob_match: { type: Type.NUMBER },
-                      crn_match: { type: Type.NUMBER },
-                      composite: { type: Type.NUMBER }
+  let lastError = null;
+  const maxRetries = 3;
+  
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      if (attempt > 0) {
+        const delay = Math.pow(2, attempt) * 2000;
+        console.warn(`[AI-SCREEN] Rate limit hit. Attempt ${attempt}/${maxRetries}. Retrying in ${delay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview", 
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        config: {
+          systemInstruction: SYSTEM_PROMPT,
+          temperature: 0.1,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              overall_result: { type: Type.STRING },
+              overall_recommended_action: { type: Type.STRING },
+              screener_notes: { type: Type.STRING },
+              watchlist_matches: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    watchlist_entry: { type: Type.STRING },
+                    list_source: { type: Type.STRING },
+                    scores: {
+                      type: Type.OBJECT,
+                      properties: {
+                        name_match: { type: Type.NUMBER },
+                        country_match: { type: Type.NUMBER },
+                        id_match: { type: Type.NUMBER },
+                        dob_match: { type: Type.NUMBER },
+                        crn_match: { type: Type.NUMBER },
+                        composite: { type: Type.NUMBER }
+                      }
                     }
                   }
                 }
@@ -152,24 +161,30 @@ export async function performAdvancedScreening(client: Client, sanEntries: Sanct
             }
           }
         }
+      });
+
+      const text = response.text;
+      if (!text) {
+        throw new Error("Empty response from AI");
       }
-    });
 
-    const text = response.text;
-    if (!text) {
-      throw new Error("Empty response from AI");
+      return JSON.parse(text) as DetailedMatchReport;
+    } catch (err: any) {
+      lastError = err;
+      const isRateLimit = err.message?.includes("429") || err.message?.includes("RESOURCE_EXHAUSTED");
+      
+      if (isRateLimit && attempt < maxRetries) {
+        continue;
+      }
+      
+      console.error("[AI-SCREEN] Execution Failure:", err);
+      if (isRateLimit) {
+        throw new Error("Gemini API Quota Exceeded: Your rate limit has been reached. Please wait a minute or upgrade to a pay-as-you-go plan in Google AI Studio.");
+      }
+      throw new Error(err.message || "An unexpected error occurred during the AI screening process.");
     }
-
-    return JSON.parse(text) as DetailedMatchReport;
-  } catch (err: any) {
-    console.error("[AI-SCREEN] Execution Failure:", err);
-    
-    // Specifically handle quota/billing errors for better user guidance
-    if (err.message?.includes("RESOURCE_EXHAUSTED") || err.message?.includes("429")) {
-      throw new Error("Gemini API Quota Exceeded: Your prepayment credits are depleted or you've reached the rate limit. Please manage your billing at ai.studio or switch to a free tier key.");
-    }
-    
-    throw new Error(err.message || "An unexpected error occurred during the AI screening process.");
   }
+
+  throw lastError;
 }
 

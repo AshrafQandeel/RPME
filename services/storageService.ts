@@ -1,4 +1,4 @@
-import { getSupabase } from './supabaseClient';
+import { getSupabase } from './supabaseClient.js';
 
 const BUCKET_NAME = 'entity-documents';
 
