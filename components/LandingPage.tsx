@@ -67,13 +67,35 @@ const LandingPage: React.FC = () => {
               src="https://raw.githubusercontent.com/AnasQandeel/RPME-Logo/main/RPME%20Logo.png" 
               alt="RPME Logo" 
               className="h-10 w-auto"
+              referrerPolicy="no-referrer"
               onError={(e) => { e.currentTarget.src = "https://placehold.co/200x80/064e3b/ffffff?text=RPME"; }}
             />
           </div>
           <div className="hidden md:flex items-center gap-8">
-            <a href="#about" className="text-sm font-semibold text-slate-600 hover:text-emerald-700 transition-colors">About</a>
-            <a href="#services" className="text-sm font-semibold text-slate-600 hover:text-emerald-700 transition-colors">Services</a>
-            <a href="#locations" className="text-sm font-semibold text-slate-600 hover:text-emerald-700 transition-colors">Locations</a>
+            <a 
+              href="https://www.rodlme.com/offices/qatar/" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-sm font-semibold text-slate-600 hover:text-emerald-700 transition-colors"
+            >
+              About
+            </a>
+            <a 
+              href="https://www.rodlme.com/offices/qatar/" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-sm font-semibold text-slate-600 hover:text-emerald-700 transition-colors"
+            >
+              Services
+            </a>
+            <a 
+              href="https://www.rodlme.com/offices/qatar/" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-sm font-semibold text-slate-600 hover:text-emerald-700 transition-colors"
+            >
+              Locations
+            </a>
             <button 
               onClick={() => navigate('/login')}
               className="bg-emerald-900 text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-md hover:bg-emerald-950 transition-all active:scale-95"
@@ -112,7 +134,10 @@ const LandingPage: React.FC = () => {
                   Client Screening Portal
                   <ArrowRight size={18} />
                 </button>
-                <button className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-6 py-3.5 rounded-xl font-bold hover:bg-slate-50 transition-all">
+                <button 
+                  onClick={() => window.open('https://www.rodlme.com/offices/qatar/', '_blank')}
+                  className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-6 py-3.5 rounded-xl font-bold hover:bg-slate-50 transition-all font-sans"
+                >
                   Our Services
                 </button>
               </div>
@@ -123,9 +148,10 @@ const LandingPage: React.FC = () => {
                 className="rounded-[2.5rem] overflow-hidden shadow-2xl aspect-[3/2] max-h-[380px] relative border-[6px] border-white/50 backdrop-blur-sm transition-transform duration-700 group-hover:scale-[1.02]"
               >
                 <img 
-                  src="https://images.unsplash.com/photo-1588668214407-6ea9a6d8c272?auto=format&fit=crop&q=80&w=1200" 
-                  alt="Doha West Bay Skyline"
+                  src="https://images.unsplash.com/photo-1514565131-fce0801e5785?auto=format&fit=crop&q=80&w=1200" 
+                  alt="Modern City Skyline"
                   className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
+                  referrerPolicy="no-referrer"
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-emerald-950/60 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
               </div>
@@ -178,7 +204,10 @@ const LandingPage: React.FC = () => {
                   <p className="text-sm text-slate-500 leading-relaxed mb-6">
                     {service.description}
                   </p>
-                  <button className="text-emerald-700 font-black text-[10px] uppercase tracking-widest flex items-center gap-2 group-hover:gap-4 transition-all">
+                  <button 
+                    onClick={() => window.open('https://www.rodlme.com/offices/qatar/', '_blank')}
+                    className="text-emerald-700 font-black text-[10px] uppercase tracking-widest flex items-center gap-2 group-hover:gap-4 transition-all"
+                  >
                     Explore Service <ChevronRight size={14} />
                   </button>
                 </div>
@@ -204,8 +233,12 @@ const LandingPage: React.FC = () => {
           
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-8">
             {locations.map((loc, idx) => (
-              <div key={idx} className="bg-white/5 backdrop-blur-sm border border-white/10 p-8 rounded-3xl text-center hover:bg-white/10 transition-all cursor-default">
-                <MapPin className="mx-auto mb-4 text-emerald-400" size={24} />
+              <div 
+                key={idx} 
+                onClick={() => loc.city === 'Doha' && window.open('https://www.rodlme.com/offices/qatar/', '_blank')}
+                className={`bg-white/5 backdrop-blur-sm border border-white/10 p-8 rounded-3xl text-center transition-all ${loc.city === 'Doha' ? 'hover:bg-white/20 cursor-pointer border-emerald-500/50' : 'cursor-default'}`}
+              >
+                <MapPin className={`mx-auto mb-4 ${loc.city === 'Doha' ? 'text-emerald-400' : 'text-slate-400'}`} size={24} />
                 <div className="text-lg font-bold">{loc.city}</div>
                 <div className="text-xs text-emerald-300 font-bold uppercase tracking-widest mt-1">{loc.country}</div>
               </div>
@@ -223,6 +256,7 @@ const LandingPage: React.FC = () => {
                 src="https://raw.githubusercontent.com/AnasQandeel/RPME-Logo/main/RPME%20Logo.png" 
                 alt="RPME Logo" 
                 className="h-12 w-auto invert brightness-0 grayscale opacity-80"
+                referrerPolicy="no-referrer"
               />
               <p className="text-slate-400 max-w-sm leading-relaxed">
                 A member profile of RPME Limited, the leading international firm for integrated professional services. Supporting German business globally since 1977.
@@ -236,7 +270,16 @@ const LandingPage: React.FC = () => {
             <div className="space-y-6">
               <h4 className="text-xs font-black uppercase tracking-widest text-emerald-500">Contact</h4>
               <ul className="space-y-4 text-slate-400 text-sm">
-                <li>Doha, Qatar</li>
+                <li>
+                  <a 
+                    href="https://www.rodlme.com/offices/qatar/" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="hover:text-emerald-400 transition-colors"
+                  >
+                    Doha, Qatar
+                  </a>
+                </li>
                 <li>Dubai, UAE</li>
                 <li>Kuwait City, Kuwait</li>
                 <li>Muscat, Oman</li>
