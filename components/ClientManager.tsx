@@ -333,7 +333,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({
     } else {
       // Commit new entity creation
       setShowDocWarning(false);
-      handleSubmit();
+      handleSubmit(undefined, true);
     }
   };
 
@@ -354,13 +354,13 @@ const ClientManager: React.FC<ClientManagerProps> = ({
     setSelectedClient(null); // Close dossier if open
   };
 
-  const handleSubmit = async (e?: React.FormEvent) => {
+  const handleSubmit = async (e?: React.FormEvent, bypassDocCheck: boolean = false) => {
     if (e) e.preventDefault();
     if (isSubmitting) return;
 
     // Check for documents if committing
     const docCount = formData.document_count || 0;
-    if (!editMode && docCount === 0 && !showDocWarning) {
+    if (!editMode && docCount === 0 && !showDocWarning && !bypassDocCheck) {
       setShowDocWarning(true);
       return;
     }
