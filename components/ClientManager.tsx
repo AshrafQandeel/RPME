@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Client, RiskLevel, KYCStatus, EntityType, UserRole, ScreeningProgress, PersonRecord } from '../types';
 import { 
   Plus, Trash2, Eye, RefreshCw, X, CheckCircle2, Landmark, 
@@ -238,6 +238,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({
   currentUserId 
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScanningAdvanced, setIsScanningAdvanced] = useState(false);
   const [advancedScreenError, setAdvancedScreenError] = useState<string | null>(null);
@@ -372,7 +373,12 @@ const ClientManager: React.FC<ClientManagerProps> = ({
     if (!formData["Company Nationality"]) errors.push("Company Nationality");
 
     setFormErrors(errors);
-    if (errors.length > 0) return;
+    if (errors.length > 0) {
+      setTimeout(() => {
+        formRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 50);
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -382,6 +388,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({
         const initialStatus = isDataEntry ? KYCStatus.PENDING_REVIEW : KYCStatus.DRAFT;
         const newClient: Client = { 
           ...formData, 
+          "Status": formData["Status"] || "Pending",
           created_at: new Date().toISOString(), 
           created_by: currentUserId, 
           kyc_status: initialStatus,
@@ -398,6 +405,9 @@ const ClientManager: React.FC<ClientManagerProps> = ({
     } catch (err: any) { 
       console.error("[Persistence Error]", err);
       setSubmissionError(err.message || "Conflict or communication error during record provisioning.");
+      setTimeout(() => {
+        formRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 50);
     } finally { 
       setIsSubmitting(false); 
     }
@@ -1054,7 +1064,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({
               </h3>
               <button onClick={() => setIsModalOpen(false)} className="bg-white/10 p-2.5 rounded-full"><X size={20}/></button>
             </div>
-            <form onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto p-6 sm:p-10 space-y-8 custom-scrollbar bg-gray-50/30 pb-24">
+            <form ref={formRef} onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto p-6 sm:p-10 space-y-8 custom-scrollbar bg-gray-50/30 pb-24">
               {submissionError && (
                 <div className="p-4 bg-red-50 border border-red-100 rounded-[1.5rem] flex items-center gap-4 animate-in slide-in-from-top-2">
                   <div className="p-2 bg-red-600 text-white rounded-lg animate-pulse">

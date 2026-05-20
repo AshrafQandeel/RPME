@@ -289,7 +289,7 @@ export const upsertCloudClient = async (client: Client) => {
   const dbRecord: any = {
     id: client.id,
     file_no: client["No"],
-    status: client["Status"],
+    status: client["Status"] || 'Pending',
     qfc_no: client["QFC No"],
     legal_structure: client["Legal Structure"],
     company_nationality: client["Company Nationality"],
