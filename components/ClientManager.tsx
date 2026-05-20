@@ -58,7 +58,7 @@ const InputField = ({ label, value, onChange, type = "text", placeholder = "", r
           ? 'bg-red-50 border-red-200 text-red-900 focus:border-red-500' 
           : 'bg-gray-50 border-transparent text-emerald-950 focus:border-emerald-800 focus:bg-white'
       }`} 
-      value={value} 
+      value={value ?? ''} 
       onChange={e => onChange(e.target.value)} 
       required={required} 
     />
@@ -81,66 +81,91 @@ const PersonRecordManager = ({ title, records = [], onUpdate }: { title: string,
     onUpdate(next);
   };
 
+  const singularTitle = title.includes('Director') ? 'Director' :
+                        title.includes('Shareholder') ? 'Shareholder' :
+                        title.includes('UBO') ? 'UBO' : 'Signatory';
+
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center border-b border-gray-50 pb-2">
+      <div className="flex justify-between items-center border-b border-gray-100 pb-2">
          <label className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">{title}</label>
-         <button type="button" onClick={addPerson} className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-all">
-           <UserPlus size={14} />
+         <button 
+           type="button" 
+           onClick={addPerson} 
+           className="px-3 py-1 bg-emerald-50 text-emerald-800 rounded-lg hover:bg-emerald-100 transition-all flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider shadow-sm"
+         >
+           <UserPlus size={12} /> Add
          </button>
       </div>
-      {records.length === 0 && <p className="text-[9px] text-gray-300 font-bold italic uppercase">No records provisioned</p>}
-      <div className="space-y-3">
-        {records.map((person, idx) => (
-          <div key={idx} className="bg-gray-50/50 p-4 rounded-xl space-y-3 relative group">
-            <button type="button" onClick={() => removePerson(idx)} className="absolute top-2 right-2 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
-              <X size={14} />
-            </button>
-            <div className="grid grid-cols-2 gap-3">
-              <input 
-                placeholder="Full Name" 
-                className="bg-white border rounded-lg p-2 text-[11px] font-bold outline-none" 
-                value={person.name} 
-                onChange={e => updatePerson(idx, 'name', e.target.value)} 
-              />
-              <input 
-                placeholder="ID / Passport" 
-                className="bg-white border rounded-lg p-2 text-[11px] font-bold outline-none" 
-                value={person.qid_passport} 
-                onChange={e => updatePerson(idx, 'qid_passport', e.target.value)} 
-              />
-              <input 
-                placeholder="Nationality" 
-                className="bg-white border rounded-lg p-2 text-[11px] font-bold outline-none" 
-                value={person.nationality} 
-                onChange={e => updatePerson(idx, 'nationality', e.target.value)} 
-              />
-              <input 
-                type="date" 
-                className="bg-white border rounded-lg p-2 text-[11px] font-bold outline-none" 
-                value={person.dob} 
-                onChange={e => updatePerson(idx, 'dob', e.target.value)} 
-              />
-              <input 
-                placeholder="Authority/Role" 
-                className="bg-white border rounded-lg p-2 text-[11px] font-bold outline-none" 
-                value={person.authority || ''} 
-                onChange={e => updatePerson(idx, 'authority', e.target.value)} 
-              />
-              <div className="relative">
+      {records.length === 0 ? (
+        <button 
+          type="button" 
+          onClick={addPerson} 
+          className="w-full py-6 border border-dashed border-slate-300 rounded-2xl text-center text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-emerald-800 hover:bg-emerald-50/40 hover:border-emerald-300 transition-all flex flex-col items-center justify-center gap-2 group bg-slate-50/30"
+        >
+          <div className="p-2.5 bg-white rounded-xl shadow-sm border border-slate-100 group-hover:bg-white group-hover:text-emerald-800 transition-all">
+            <UserPlus size={16} className="text-slate-400 group-hover:text-emerald-800 transition-colors" />
+          </div>
+          <span>Add {singularTitle} Record</span>
+        </button>
+      ) : (
+        <div className="space-y-3">
+          {records.map((person, idx) => (
+            <div key={idx} className="bg-slate-50 p-4 rounded-2xl border border-slate-100/50 space-y-3 relative group shadow-sm animate-in fade-in-50 zoom-in-95 duration-150">
+              <button 
+                type="button" 
+                onClick={() => removePerson(idx)} 
+                className="absolute top-3 right-3 p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                title="Remove Record"
+              >
+                <X size={14} />
+              </button>
+              <div className="grid grid-cols-2 gap-3 pr-6">
                 <input 
-                  type="number"
-                  placeholder="Share %" 
-                  className="w-full bg-white border rounded-lg p-2 text-[11px] font-bold outline-none pr-6" 
-                  value={person.percentage || ''} 
-                  onChange={e => updatePerson(idx, 'percentage', parseFloat(e.target.value) || 0)} 
+                  placeholder="Full Name" 
+                  className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all" 
+                  value={person.name || ''} 
+                  onChange={e => updatePerson(idx, 'name', e.target.value)} 
                 />
-                <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[9px] font-black text-gray-400">%</span>
+                <input 
+                  placeholder="ID / Passport" 
+                  className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all" 
+                  value={person.qid_passport || ''} 
+                  onChange={e => updatePerson(idx, 'qid_passport', e.target.value)} 
+                />
+                <input 
+                  placeholder="Nationality" 
+                  className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all" 
+                  value={person.nationality || ''} 
+                  onChange={e => updatePerson(idx, 'nationality', e.target.value)} 
+                />
+                <input 
+                  type="date" 
+                  className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all text-slate-700" 
+                  value={person.dob || ''} 
+                  onChange={e => updatePerson(idx, 'dob', e.target.value)} 
+                />
+                <input 
+                  placeholder="Authority/Role" 
+                  className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all" 
+                  value={person.authority || ''} 
+                  onChange={e => updatePerson(idx, 'authority', e.target.value)} 
+                />
+                <div className="relative">
+                  <input 
+                    type="number"
+                    placeholder="Share %" 
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none pr-6 focus:ring-2 focus:ring-emerald-800 transition-all" 
+                    value={person.percentage || ''} 
+                    onChange={e => updatePerson(idx, 'percentage', parseFloat(e.target.value) || 0)} 
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400">%</span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
