@@ -374,6 +374,7 @@ const App: React.FC = () => {
     } catch (e: any) { 
       console.error("[App] Client Deletion Failure:", e);
       setConnectionStatus('SAFE_MODE');
+      throw e;
     } finally { setIsRefreshingClients(false); }
   };
 
@@ -394,6 +395,7 @@ const App: React.FC = () => {
     } catch (e: any) { 
       console.error("[App] Client Update Failure:", e);
       setConnectionStatus('SAFE_MODE');
+      throw e;
     }
   };
 

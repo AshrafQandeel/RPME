@@ -159,6 +159,24 @@ export const searchSanctionsAuthoritative = async (
   }
 };
 
+const parseJsonArray = (val: any): any[] => {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  if (typeof val === 'string') {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed;
+      if (typeof parsed === 'string') {
+        const doubleParsed = JSON.parse(parsed);
+        if (Array.isArray(doubleParsed)) return doubleParsed;
+      }
+    } catch (e) {
+      console.error("[CloudDB] JSON parsing failed for value:", val, e);
+    }
+  }
+  return [];
+};
+
 export const fetchCloudClients = async (from: number, to: number, userRole?: string, userId?: string): Promise<Client[]> => {
   if (!supabaseClient) initSupabase();
   
@@ -183,7 +201,7 @@ export const fetchCloudClients = async (from: number, to: number, userRole?: str
     "Legal Structure": row["Legal Structure"] || row.legal_structure || row.legalStructure || row.structure || '',
     "Company Nationality": row["Company Nationality"] || row["Corporate Nationality "] || row.company_nationality || row.companyNationality || row.nationality || row.country || '',
     "Client Name": row["Client Name"] || row.client_name || row.clientName || row.name || row.full_name || '',
-    "Services Provided": row["Services Provided"] || row["Services needed"] || row.services_provided || row.servicesProvided || row.services || [],
+    "Services Provided": parseJsonArray(row["Services Provided"] || row["Services needed"] || row.services_provided || row.servicesProvided || row.services),
     "Engagement Year": row["Engagement Year"] || row["Engagement Year "] || row.engagement_year || row.engagementYear || row.year || '',
     "Engagement Date": row["Engagement Date"] || row.engagement_date || row.engagementDate || '',
     "Onboarding Date": row["Onboarding Date"] || row["Onboarding Date "] || row.onboarding_date || row.onboardingDate || '',
@@ -198,10 +216,10 @@ export const fetchCloudClients = async (from: number, to: number, userRole?: str
     "Telephone Number": row["Telephone Number"] || row.telephone_number || row.telephoneNumber || row.phone || '',
     "E Mail": row["E Mail"] || row.email || row.Email || '',
     "Website": row.Website || row.website || '',
-    "Directors Names": row["Directors Names"] || row.directors_names || row.directorsNames || row.directors || [],
-    "Significant Shareholders": row["Significant Shareholders"] || row.shareholders || row.significantShareholders || row.significant_shareholders || [],
-    "UBO Details": row["UBO Details"] || row.ubo_details || row.ubos || row.uboDetails || [],
-    "Authorized Signatory": row["Authorized Signatory"] || row.signatories || row.authorizedSignatory || row.authorized_signatory || [],
+    "Directors Names": parseJsonArray(row["Directors Names"] || row.directors_names || row.directorsNames || row.directors),
+    "Significant Shareholders": parseJsonArray(row["Significant Shareholders"] || row.shareholders || row.significantShareholders || row.significant_shareholders),
+    "UBO Details": parseJsonArray(row["UBO Details"] || row.ubo_details || row.ubos || row.uboDetails),
+    "Authorized Signatory": parseJsonArray(row["Authorized Signatory"] || row.signatories || row.authorizedSignatory || row.authorized_signatory),
     "Secretary": row.Secretary || row.secretary || '',
     "Senior Executive Function": row["Senior Executive Function"] || row.sef || row.senior_executive_function || row.sefName || row.sef_name || '',
     "Approved Auditor": row["Approved Auditor"] || row.auditor || row.approved_auditor || row.auditorName || row.auditor_name || '',

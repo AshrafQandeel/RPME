@@ -66,7 +66,7 @@ const InputField = ({ label, value, onChange, type = "text", placeholder = "", r
   </div>
 );
 
-const PersonRecordManager = ({ title, records, onUpdate }: { title: string, records: PersonRecord[], onUpdate: (recs: PersonRecord[]) => void }) => {
+const PersonRecordManager = ({ title, records = [], onUpdate }: { title: string, records?: PersonRecord[], onUpdate: (recs: PersonRecord[]) => void }) => {
   const addPerson = () => {
     onUpdate([...records, { name: '', qid_passport: '', nationality: '', dob: '', authority: '', percentage: 0 }]);
   };
@@ -84,10 +84,10 @@ const PersonRecordManager = ({ title, records, onUpdate }: { title: string, reco
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center border-b border-gray-50 pb-2">
-        <label className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">{title}</label>
-        <button type="button" onClick={addPerson} className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-all">
-          <UserPlus size={14} />
-        </button>
+         <label className="text-[10px] font-black text-emerald-800 uppercase tracking-widest">{title}</label>
+         <button type="button" onClick={addPerson} className="p-1.5 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 transition-all">
+           <UserPlus size={14} />
+         </button>
       </div>
       {records.length === 0 && <p className="text-[9px] text-gray-300 font-bold italic uppercase">No records provisioned</p>}
       <div className="space-y-3">
