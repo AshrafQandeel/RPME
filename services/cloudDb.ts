@@ -177,6 +177,14 @@ const parseJsonArray = (val: any): any[] => {
   return [];
 };
 
+const resolveFirstNonEmptyArrayValue = (...vals: any[]): any[] => {
+  for (const v of vals) {
+    const list = parseJsonArray(v);
+    if (list && list.length > 0) return list;
+  }
+  return [];
+};
+
 export const fetchCloudClients = async (from: number, to: number, userRole?: string, userId?: string): Promise<Client[]> => {
   if (!supabaseClient) initSupabase();
   
@@ -216,10 +224,10 @@ export const fetchCloudClients = async (from: number, to: number, userRole?: str
     "Telephone Number": row["Telephone Number"] || row.telephone_number || row.telephoneNumber || row.phone || '',
     "E Mail": row["E Mail"] || row.email || row.Email || '',
     "Website": row.Website || row.website || '',
-    "Directors Names": parseJsonArray(row["Directors Names"] || row.directors_names || row.directorsNames || row.directors),
-    "Significant Shareholders": parseJsonArray(row["Significant Shareholders"] || row.shareholders || row.significantShareholders || row.significant_shareholders),
-    "UBO Details": parseJsonArray(row["UBO Details"] || row.ubo_details || row.ubos || row.uboDetails),
-    "Authorized Signatory": parseJsonArray(row["Authorized Signatory"] || row.signatories || row.authorizedSignatory || row.authorized_signatory),
+    "Directors Names": resolveFirstNonEmptyArrayValue(row["Directors Names"], row.directors_names, row.directorsNames, row.directors),
+    "Significant Shareholders": resolveFirstNonEmptyArrayValue(row["Significant Shareholders"], row.shareholders, row.significantShareholders, row.significant_shareholders),
+    "UBO Details": resolveFirstNonEmptyArrayValue(row["UBO Details"], row.ubo_details, row.ubos, row.uboDetails),
+    "Authorized Signatory": resolveFirstNonEmptyArrayValue(row["Authorized Signatory"], row.signatories, row.authorizedSignatory, row.authorized_signatory),
     "Secretary": row.Secretary || row.secretary || '',
     "Senior Executive Function": row["Senior Executive Function"] || row.sef || row.senior_executive_function || row.sefName || row.sef_name || '',
     "Approved Auditor": row["Approved Auditor"] || row.auditor || row.approved_auditor || row.auditorName || row.auditor_name || '',
@@ -302,9 +310,16 @@ export const upsertCloudClient = async (client: Client) => {
     email: client["E Mail"],
     website: client["Website"],
     directors: client["Directors Names"],
+    directors_names: client["Directors Names"],
+    "Directors Names": client["Directors Names"],
     shareholders: client["Significant Shareholders"],
+    "Significant Shareholders": client["Significant Shareholders"],
+    significant_shareholders: client["Significant Shareholders"],
     ubo_details: client["UBO Details"],
+    "UBO Details": client["UBO Details"],
     signatories: client["Authorized Signatory"],
+    "Authorized Signatory": client["Authorized Signatory"],
+    authorized_signatory: client["Authorized Signatory"],
     secretary: client["Secretary"],
     sef: client["Senior Executive Function"],
     auditor: client["Approved Auditor"],
