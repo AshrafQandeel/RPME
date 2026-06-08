@@ -150,15 +150,15 @@ const App: React.FC = () => {
     } catch (e) { console.error("[App] Cache Refresh Failure:", e); }
   }, [updateLocalRefreshTimestamp]);
 
-  const refreshClients = useCallback(async (page: number = 1) => {
+  const refreshClients = useCallback(async (page: number = 1, searchQuery?: string) => {
     setIsRefreshingClients(true);
     currentPageRef.current = page;
     try {
       const from = (page - 1) * CLIENTS_PER_PAGE;
       const to = from + CLIENTS_PER_PAGE - 1;
       const [cloudClients, count, globalRisks] = await Promise.all([
-        fetchCloudClients(from, to, currentUser?.role, currentUser?.id),
-        fetchClientsTotalCount(),
+        fetchCloudClients(from, to, currentUser?.role, currentUser?.id, searchQuery),
+        fetchClientsTotalCount(currentUser?.role, currentUser?.id, searchQuery),
         fetchGlobalRiskCounts()
       ]);
       if (cloudClients) setClients(cloudClients);
@@ -167,9 +167,10 @@ const App: React.FC = () => {
       setCurrentClientsPage(page);
       updateLocalRefreshTimestamp();
     } catch (e) { 
+      console.error("[App] refreshClients error:", e);
       setConnectionStatus('SAFE_MODE');
     } finally { setIsRefreshingClients(false); }
-  }, [updateLocalRefreshTimestamp]);
+  }, [updateLocalRefreshTimestamp, currentUser]);
 
   // --- SCHEDULED 08:00 AM BACKGROUND UPDATE ENGINE ---
   useEffect(() => {
@@ -491,7 +492,7 @@ const App: React.FC = () => {
                 isRefreshing={isRefreshingClients} 
                 onAddClient={handleAddClientWithAuthoritativeScreening} 
                 onDeleteClient={handleDeleteClient} 
-                onRefresh={() => refreshClients(currentClientsPage)} 
+                onRefresh={(searchQuery?: string) => refreshClients(currentClientsPage, searchQuery)} 
                 onReScreen={handleGlobalBatchScreening} 
                 onUpdateClient={handleUpdateClient} 
                 onAdvancedScreening={handleAdvancedScreening} 

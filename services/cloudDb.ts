@@ -185,7 +185,7 @@ const resolveFirstNonEmptyArrayValue = (...vals: any[]): any[] => {
   return [];
 };
 
-export const fetchCloudClients = async (from: number, to: number, userRole?: string, userId?: string): Promise<Client[]> => {
+export const fetchCloudClients = async (from: number, to: number, userRole?: string, userId?: string, searchQuery?: string): Promise<Client[]> => {
   if (!supabaseClient) initSupabase();
   
   let query = supabaseClient.from('clients').select('*');
@@ -195,11 +195,21 @@ export const fetchCloudClients = async (from: number, to: number, userRole?: str
     query = query.eq('created_by', userId);
   }
 
+  if (searchQuery) {
+    const trimmed = searchQuery.trim();
+    if (trimmed) {
+      query = query.or(`client_name.ilike.%${trimmed}%,file_no.ilike.%${trimmed}%,qfc_no.ilike.%${trimmed}%,company_nationality.ilike.%${trimmed}%`);
+    }
+  }
+
   const { data, error } = await query
     .order('created_at', { ascending: false })
     .range(from, to);
 
-  if (error) throw error;
+  if (error) {
+    console.error("[fetchCloudClients] Error:", error);
+    throw error;
+  }
   
   return (data || []).map((row: any) => ({
     id: row.id,
@@ -244,10 +254,87 @@ export const fetchCloudClients = async (from: number, to: number, userRole?: str
   } as Client));
 };
 
-export const fetchClientsTotalCount = async (): Promise<number> => {
+export const fetchClientsTotalCount = async (userRole?: string, userId?: string, searchQuery?: string): Promise<number> => {
   if (!supabaseClient) initSupabase();
-  const { count, error } = await supabaseClient.from('clients').select('*', { count: 'exact', head: true });
+  let query = supabaseClient.from('clients').select('*', { count: 'exact', head: true });
+  
+  if (userRole === 'user' && userId) {
+    query = query.eq('created_by', userId);
+  }
+
+  if (searchQuery) {
+    const trimmed = searchQuery.trim();
+    if (trimmed) {
+      query = query.or(`client_name.ilike.%${trimmed}%,file_no.ilike.%${trimmed}%,qfc_no.ilike.%${trimmed}%,company_nationality.ilike.%${trimmed}%`);
+    }
+  }
+
+  const { count, error } = await query;
   return error ? 0 : count || 0;
+};
+
+export const fetchAllCloudClientsForExport = async (userRole?: string, userId?: string, searchQuery?: string): Promise<Client[]> => {
+  if (!supabaseClient) initSupabase();
+  let query = supabaseClient.from('clients').select('*');
+  
+  if (userRole === 'user' && userId) {
+    query = query.eq('created_by', userId);
+  }
+
+  if (searchQuery) {
+    const trimmed = searchQuery.trim();
+    if (trimmed) {
+      query = query.or(`client_name.ilike.%${trimmed}%,file_no.ilike.%${trimmed}%,qfc_no.ilike.%${trimmed}%,company_nationality.ilike.%${trimmed}%`);
+    }
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) {
+    console.error("[fetchAllCloudClientsForExport] Error:", error);
+    throw error;
+  }
+  
+  return (data || []).map((row: any) => ({
+    id: row.id,
+    "No": row.No || row.file_no || row.no || row.fileNo || '',
+    "Status": row.Status || row.status || 'Active',
+    "QFC No": row["QFC No"] || row.qfc_no || row.qfcNo || row.qfc_number || '',
+    "Legal Structure": row["Legal Structure"] || row.legal_structure || row.legalStructure || row.structure || '',
+    "Company Nationality": row["Company Nationality"] || row["Corporate Nationality "] || row.company_nationality || row.companyNationality || row.nationality || row.country || '',
+    "Client Name": row["Client Name"] || row.client_name || row.clientName || row.name || row.full_name || '',
+    "Services Provided": parseJsonArray(row["Services Provided"] || row["Services needed"] || row.services_provided || row.servicesProvided || row.services),
+    "Engagement Year": row["Engagement Year"] || row["Engagement Year "] || row.engagement_year || row.engagementYear || row.year || '',
+    "Engagement Date": row["Engagement Date"] || row.engagement_date || row.engagementDate || '',
+    "Onboarding Date": row["Onboarding Date"] || row["Onboarding Date "] || row.onboarding_date || row.onboardingDate || '',
+    "Date of QFC Incorporation or Registration": row["Date of QFC Incorporation or Registration"] || row.qfc_incorp_date || row.incorporation_date || row.incorpDate || '',
+    "CR Expired date": row["CR Expired date"] || row.cr_expiry_date || row.crExpiryDate || row.cr_expiry || '',
+    "Entity Card No": row["Entity Card No"] || row.entity_card_no || row.entityCardNo || '',
+    "Entity Card Expiry": row["Entity Card Expiry"] || row.entity_card_expiry || row.entityCardExpiry || '',
+    "License": row.License || row.license || '',
+    "License Expiry": row["License Expiry"] || row.license_expiry || row.licenseExpiry || '',
+    "Nature of Business": row["Nature of Business"] || row.nature_of_business || row.natureOfBusiness || row.businessNature || '',
+    "Registered Address": row["Registered Address"] || row.registered_address || row.registeredAddress || row.address || '',
+    "Telephone Number": row["Telephone Number"] || row.telephone_number || row.telephoneNumber || row.phone || '',
+    "E Mail": row["E Mail"] || row.email || row.Email || '',
+    "Website": row.Website || row.website || '',
+    "Directors Names": resolveFirstNonEmptyArrayValue(row["Directors Names"], row.directors_names, row.directorsNames, row.directors),
+    "Significant Shareholders": resolveFirstNonEmptyArrayValue(row["Significant Shareholders"], row.shareholders, row.significantShareholders, row.significant_shareholders),
+    "UBO Details": resolveFirstNonEmptyArrayValue(row["UBO Details"], row.ubo_details, row.ubos, row.uboDetails),
+    "Authorized Signatory": resolveFirstNonEmptyArrayValue(row["Authorized Signatory"], row.signatories, row.authorizedSignatory, row.authorized_signatory),
+    "Secretary": row.Secretary || row.secretary || '',
+    "Senior Executive Function": row["Senior Executive Function"] || row.sef || row.senior_executive_function || row.sefName || row.sef_name || '',
+    "Approved Auditor": row["Approved Auditor"] || row.auditor || row.approved_auditor || row.auditorName || row.auditor_name || '',
+    "Company Type": row["Company Type"] || row.company_type || row.companyType || '',
+    created_at: row.created_at,
+    created_by: row.created_by,
+    kyc_status: row.kyc_status as KYCStatus,
+    riskLevel: row.risk_level as RiskLevel || row.riskLevel as RiskLevel,
+    matches: row.matches || [],
+    match_details: row.match_details || null,
+    lastScreenedAt: row.last_screened_at || row.lastScreenedAt,
+    entity_type: row.entity_type as EntityType,
+    document_count: row.document_count || 0
+  } as Client));
 };
 
 export const fetchGlobalRiskCounts = async (): Promise<Record<RiskLevel, number>> => {
@@ -733,4 +820,101 @@ export const deleteCloudUser = async (email: string) => {
   if (!supabaseClient) initSupabase();
   const { error } = await supabaseClient.from('profiles').delete().eq('email', email);
   if (error) throw error;
+};
+
+export const checkClientDuplicate = async (clientName: string, qfcNo?: string, fileNo?: string, excludeId?: string): Promise<{ isDuplicate: boolean; reason?: string } | null> => {
+  if (!supabaseClient) initSupabase();
+  
+  const orConditions: string[] = [];
+  if (clientName && clientName.trim()) {
+    // Avoid commas or special characters causing query parsing errors, cleanly escape or structure
+    orConditions.push(`client_name.ilike.%${clientName.trim()}%`);
+  }
+  if (qfcNo && qfcNo.trim()) {
+    orConditions.push(`qfc_no.eq.${qfcNo.trim()}`);
+  }
+  if (fileNo && fileNo.trim()) {
+    orConditions.push(`file_no.eq.${fileNo.trim()}`);
+  }
+  
+  if (orConditions.length === 0) return { isDuplicate: false };
+
+  let query = supabaseClient.from('clients').select('id, client_name, qfc_no, file_no');
+  
+  if (excludeId) {
+    query = query.neq('id', excludeId);
+  }
+  
+  const { data, error } = await query.or(orConditions.join(','));
+  if (error) {
+    console.error("[checkClientDuplicate] Error:", error);
+    return null;
+  }
+  
+  if (data && data.length > 0) {
+    // Check exact matches or similar matches
+    for (const dup of data) {
+      if (clientName && dup.client_name?.toLowerCase() === clientName.trim().toLowerCase()) {
+        return { 
+          isDuplicate: true, 
+          reason: `Duplicate detected: An entity named "${dup.client_name}" already exists in the system (ID matches).` 
+        };
+      }
+      if (qfcNo && qfcNo.trim() && dup.qfc_no === qfcNo.trim()) {
+        return { 
+          isDuplicate: true, 
+          reason: `Duplicate detected: An entity with QFC No. "${qfcNo.trim()}" already exists in the system.` 
+        };
+      }
+      if (fileNo && fileNo.trim() && dup.file_no === fileNo.trim()) {
+        return { 
+          isDuplicate: true, 
+          reason: `Duplicate detected: An entity with File Reference No. "${fileNo.trim()}" already exists in the system.` 
+        };
+      }
+    }
+  }
+  
+  return { isDuplicate: false };
+};
+
+export const generateNextFileReference = async (): Promise<string> => {
+  if (!supabaseClient) initSupabase();
+  const { data, error } = await supabaseClient.from('clients').select('file_no').order('created_at', { ascending: false }).limit(50);
+  
+  let maxNum = 1000; // default baseline
+  const prefix = "RP-";
+  const year = new Date().getFullYear();
+
+  if (!error && data && data.length > 0) {
+    for (const row of data) {
+      const parts = (row.file_no || '').split('-');
+      const lastPart = parts[parts.length - 1];
+      const numMatch = (lastPart || row.file_no || '').match(/\d+/);
+      if (numMatch) {
+        const num = parseInt(numMatch[0], 10);
+        if (num > maxNum && num < 1000000) { // filter out giant timestamps if any
+          maxNum = num;
+        }
+      }
+    }
+  } else {
+    // If no records, let's check overall max by trying a broader scan
+    const { data: allData } = await supabaseClient.from('clients').select('file_no');
+    if (allData) {
+      for (const row of allData) {
+        const parts = (row.file_no || '').split('-');
+        const lastPart = parts[parts.length - 1];
+        const numMatch = (lastPart || row.file_no || '').match(/\d+/);
+        if (numMatch) {
+          const num = parseInt(numMatch[0], 10);
+          if (num > maxNum && num < 1000000) {
+            maxNum = num;
+          }
+        }
+      }
+    }
+  }
+
+  return `${prefix}${year}-${maxNum + 1}`;
 };

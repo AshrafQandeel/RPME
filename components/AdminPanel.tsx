@@ -4,7 +4,7 @@ import { AppSettings, SystemLog, UserRole, UserProfile, AccountStatus, SystemEnv
 import { 
   Plus, Trash2, Shield, Users, History, Beaker, Terminal, X, 
   Loader2, RefreshCw, FileCheck, Bookmark, Calendar, AlertTriangle, Bug, DatabaseZap, HardDriveDownload, 
-  Settings, Globe, ShieldAlert, ShieldCheck, Copy, Check, Info
+  Settings, Globe, ShieldAlert, ShieldCheck, Copy, Check, Info, Maximize2, Minimize2
 } from 'lucide-react';
 import { upsertCloudUser, deleteCloudUser, logAuditEvent, fetchCloudUsers, fetchSystemLogs, validateRegistrySchemaV431 } from '../services/cloudDb';
 
@@ -29,11 +29,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ settings, logs: initialLogs, on
   const [isCopying, setIsCopying] = useState(false);
   
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+  const [isUserModalMaximized, setIsUserModalMaximized] = useState(false);
   const [pendingDeleteUser, setPendingDeleteUser] = useState<UserProfile | null>(null);
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserName, setNewUserName] = useState('');
   const [newUserRole, setNewUserRole] = useState<UserRole>(UserRole.USER);
   const [isNewUserAdmin, setIsNewUserAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!isUserModalOpen) {
+      setIsUserModalMaximized(false);
+    }
+  }, [isUserModalOpen]);
 
   const loadAuthoritativeData = useCallback(async () => {
     setIsLoadingUsers(true);
@@ -632,10 +639,20 @@ CREATE INDEX IF NOT EXISTS idx_workflow_client ON "public"."kyc_workflow_history
 
       {isUserModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[110] flex items-center justify-center p-4">
-           <div className="bg-white rounded-[2.5rem] w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95">
-              <div className="bg-emerald-950 p-8 text-white flex justify-between items-center">
+           <div className={`bg-white shadow-2xl overflow-hidden transition-all duration-300 flex flex-col ${isUserModalMaximized ? 'fixed inset-0 z-[120] w-full h-full rounded-none' : 'rounded-[2.5rem] w-full max-w-lg'}`}>
+              <div className="bg-emerald-950 p-8 text-white flex justify-between items-center shrink-0">
                  <h3 className="text-xl font-black uppercase">Provision Identity</h3>
-                 <button onClick={() => setIsUserModalOpen(false)} className="p-2 bg-white/10 rounded-full"><X size={20}/></button>
+                 <div className="flex items-center gap-3 shrink-0">
+                    <button 
+                      type="button"
+                      onClick={() => setIsUserModalMaximized(!isUserModalMaximized)} 
+                      title={isUserModalMaximized ? "Exit Full Screen" : "Expand to Full Screen"}
+                      className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-all flex items-center justify-center"
+                    >
+                      {isUserModalMaximized ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                    </button>
+                    <button type="button" onClick={() => setIsUserModalOpen(false)} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-all flex items-center justify-center"><X size={20}/></button>
+                 </div>
               </div>
               <form onSubmit={handleCreateUser} className="p-8 space-y-6">
                  <div className="space-y-2">

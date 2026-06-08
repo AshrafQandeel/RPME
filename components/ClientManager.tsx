@@ -9,9 +9,11 @@ import {
   Info, MapPin, Mail, Globe, FileSignature, 
   History, Fingerprint, ShieldCheck, ThumbsUp, ThumbsDown,
   Clock, Edit3, AlertTriangle, Phone, Calendar, Briefcase, UserPlus, Key, FileBadge, UserCheck, User,
-  FileCheck, CloudUpload, AlertCircle, Sparkles, Upload
+  FileCheck, CloudUpload, AlertCircle, Sparkles, Upload, Search, Download, Maximize2, Minimize2
 } from 'lucide-react';
 import { DocumentUploadModal } from './DocumentUploadModal';
+import { checkClientDuplicate, generateNextFileReference, fetchAllCloudClientsForExport } from '../services/cloudDb';
+import * as XLSX from 'xlsx';
 
 const CLIENTS_PER_PAGE = 15;
 
@@ -44,7 +46,7 @@ const FormSection: React.FC<FormSectionProps> = ({ title, icon, children, fullWi
   </div>
 );
 
-const InputField = ({ label, value, onChange, type = "text", placeholder = "", required = false, hasError = false }: any) => (
+const InputField = ({ label, value, onChange, type = "text", placeholder = "", required = false, hasError = false, disabled = false }: any) => (
   <div className="space-y-1.5 sm:space-y-2">
     <div className="flex justify-between">
         <label className={`text-[9px] font-black uppercase tracking-widest block ml-1 ${hasError ? 'text-red-500' : 'text-gray-400'}`}>{label}</label>
@@ -53,10 +55,13 @@ const InputField = ({ label, value, onChange, type = "text", placeholder = "", r
     <input 
       type={type} 
       placeholder={placeholder}
+      disabled={disabled}
       className={`w-full border-2 rounded-xl sm:rounded-2xl p-3 sm:p-4 text-sm font-bold outline-none transition-all ${
         hasError 
           ? 'bg-red-50 border-red-200 text-red-900 focus:border-red-500' 
-          : 'bg-gray-50 border-transparent text-emerald-950 focus:border-emerald-800 focus:bg-white'
+          : disabled
+            ? 'bg-gray-100 border-slate-200 text-slate-400 cursor-not-allowed font-medium'
+            : 'bg-gray-50 border-transparent text-emerald-950 focus:border-emerald-800 focus:bg-white'
       }`} 
       value={value ?? ''} 
       onChange={e => onChange(e.target.value)} 
@@ -66,19 +71,53 @@ const InputField = ({ label, value, onChange, type = "text", placeholder = "", r
   </div>
 );
 
-const PersonRecordManager = ({ title, records = [], onUpdate }: { title: string, records?: PersonRecord[], onUpdate: (recs: PersonRecord[]) => void }) => {
+const PersonRecordManager = ({ 
+  title, 
+  records = [], 
+  onUpdate, 
+  globalPeopleList = [],
+  onCopySoleOwner 
+}: { 
+  title: string; 
+  records?: PersonRecord[]; 
+  onUpdate: (recs: PersonRecord[]) => void;
+  globalPeopleList?: PersonRecord[];
+  onCopySoleOwner?: (person: PersonRecord) => void;
+}) => {
+  const [copiedStates, setCopiedStates] = useState<Record<number, boolean>>({});
+
   const addPerson = () => {
     onUpdate([...records, { name: '', qid_passport: '', nationality: '', dob: '', authority: '', percentage: 0 }]);
   };
 
   const removePerson = (index: number) => {
     onUpdate(records.filter((_, i) => i !== index));
+    const nextCopied = { ...copiedStates };
+    delete nextCopied[index];
+    setCopiedStates(nextCopied);
   };
 
   const updatePerson = (index: number, field: keyof PersonRecord, value: any) => {
     const next = [...records];
     next[index] = { ...next[index], [field]: value };
     onUpdate(next);
+  };
+
+  const handleCopyFromSelectChange = (idx: number, name: string) => {
+    const found = globalPeopleList.find(p => p.name === name);
+    if (found) {
+      const next = [...records];
+      next[idx] = {
+        ...next[idx],
+        name: found.name,
+        qid_passport: found.qid_passport,
+        nationality: found.nationality,
+        dob: found.dob,
+        authority: found.authority || next[idx].authority || '',
+        percentage: found.percentage || next[idx].percentage || 0
+      };
+      onUpdate(next);
+    }
   };
 
   const singularTitle = title.includes('Director') ? 'Director' :
@@ -110,60 +149,153 @@ const PersonRecordManager = ({ title, records = [], onUpdate }: { title: string,
         </button>
       ) : (
         <div className="space-y-3">
-          {records.map((person, idx) => (
-            <div key={idx} className="bg-slate-50 p-4 rounded-2xl border border-slate-100/50 space-y-3 relative group shadow-sm animate-in fade-in-50 zoom-in-95 duration-150">
-              <button 
-                type="button" 
-                onClick={() => removePerson(idx)} 
-                className="absolute top-3 right-3 p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
-                title="Remove Record"
-              >
-                <X size={14} />
-              </button>
-              <div className="grid grid-cols-2 gap-3 pr-6">
-                <input 
-                  placeholder="Full Name" 
-                  className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all" 
-                  value={person.name || ''} 
-                  onChange={e => updatePerson(idx, 'name', e.target.value)} 
-                />
-                <input 
-                  placeholder="ID / Passport" 
-                  className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all" 
-                  value={person.qid_passport || ''} 
-                  onChange={e => updatePerson(idx, 'qid_passport', e.target.value)} 
-                />
-                <input 
-                  placeholder="Nationality" 
-                  className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all" 
-                  value={person.nationality || ''} 
-                  onChange={e => updatePerson(idx, 'nationality', e.target.value)} 
-                />
-                <input 
-                  type="date" 
-                  className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all text-slate-700" 
-                  value={person.dob || ''} 
-                  onChange={e => updatePerson(idx, 'dob', e.target.value)} 
-                />
-                <input 
-                  placeholder="Authority/Role" 
-                  className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all" 
-                  value={person.authority || ''} 
-                  onChange={e => updatePerson(idx, 'authority', e.target.value)} 
-                />
-                <div className="relative">
+          {records.map((person, idx) => {
+            const currentRoles = (person.authority || '').split(',').map((r: string) => r.trim()).filter(Boolean);
+            const otherPeople = globalPeopleList.filter(p => p.name && p.name !== person.name);
+
+            return (
+              <div key={idx} className="bg-slate-50 p-4 rounded-2xl border border-slate-100/50 space-y-3 relative group shadow-sm animate-in fade-in-50 zoom-in-95 duration-150">
+                <button 
+                  type="button" 
+                  onClick={() => removePerson(idx)} 
+                  className="absolute top-3 right-3 p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all z-10"
+                  title="Remove Record"
+                >
+                  <X size={14} />
+                </button>
+                
+                {/* Copy From External helper */}
+                {otherPeople.length > 0 && (
+                  <div className="flex items-center gap-2 pr-6">
+                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Copy profile data from:</span>
+                    <select
+                      onChange={(e) => {
+                        handleCopyFromSelectChange(idx, e.target.value);
+                        e.target.value = '';
+                      }}
+                      defaultValue=""
+                      className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-semibold outline-none focus:ring-1 focus:ring-emerald-800 text-slate-700"
+                    >
+                      <option value="" disabled>Select existing contact...</option>
+                      {otherPeople.map((op, oIdx) => (
+                        <option key={oIdx} value={op.name}>{op.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3 pr-6">
                   <input 
-                    type="number"
-                    placeholder="Share %" 
-                    className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none pr-6 focus:ring-2 focus:ring-emerald-800 transition-all" 
-                    value={person.percentage || ''} 
-                    onChange={e => updatePerson(idx, 'percentage', parseFloat(e.target.value) || 0)} 
+                    placeholder="Full Name" 
+                    className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all" 
+                    value={person.name || ''} 
+                    onChange={e => updatePerson(idx, 'name', e.target.value)} 
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400">%</span>
+                  <input 
+                    placeholder="ID / Passport" 
+                    className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all" 
+                    value={person.qid_passport || ''} 
+                    onChange={e => updatePerson(idx, 'qid_passport', e.target.value)} 
+                  />
+                  <input 
+                    placeholder="Nationality" 
+                    className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all" 
+                    value={person.nationality || ''} 
+                    onChange={e => updatePerson(idx, 'nationality', e.target.value)} 
+                  />
+                  <input 
+                    type="date" 
+                    className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all text-slate-700" 
+                    value={person.dob || ''} 
+                    onChange={e => updatePerson(idx, 'dob', e.target.value)} 
+                  />
+                  
+                  {/* Multi-select Dropdown Option for Positions held */}
+                  <div className="col-span-2 space-y-1 bg-slate-50 border border-slate-200/60 p-3 rounded-2xl">
+                    <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest block">Positions / Roles (Multi-select)</label>
+                    <div className="flex flex-wrap gap-1.5 py-1">
+                      {["Director", "Authorized Signatory", "Shareholder", "UBO", "Secretary", "Senior Executive"].map(pos => {
+                        const isSelected = currentRoles.includes(pos);
+                        return (
+                          <button
+                            key={pos}
+                            type="button"
+                            onClick={() => {
+                              let nextRoles;
+                              if (isSelected) {
+                                nextRoles = currentRoles.filter((r: string) => r !== pos);
+                              } else {
+                                nextRoles = [...currentRoles, pos];
+                              }
+                              updatePerson(idx, 'authority', nextRoles.join(', '));
+                            }}
+                            className={`px-2 py-1 rounded-lg text-[9px] font-bold transition-all uppercase tracking-wider flex items-center gap-1 ${
+                              isSelected 
+                                ? 'bg-emerald-600 text-white shadow-sm border border-emerald-700' 
+                                : 'bg-white text-slate-600 border border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            {isSelected && <span className="text-[8px]">✓</span>} {pos}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    
+                    <div className="flex gap-2 items-center mt-1.5 pt-1.5 border-t border-slate-100">
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest shrink-0">Custom Authority:</span>
+                      <input 
+                        type="text"
+                        placeholder="Alternative custom authority..."
+                        className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-semibold outline-none focus:border-emerald-600 transition-all text-emerald-950" 
+                        value={person.authority || ''}
+                        onChange={e => updatePerson(idx, 'authority', e.target.value)} 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="relative col-span-2">
+                    <div className="relative animate-in fade-in duration-100">
+                      <input 
+                        type="number"
+                        placeholder="Share %" 
+                        className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none pr-6 focus:ring-2 focus:ring-emerald-800 transition-all" 
+                        value={person.percentage || ''} 
+                        onChange={e => updatePerson(idx, 'percentage', parseFloat(e.target.value) || 0)} 
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[9px] font-black text-slate-400">%</span>
+                    </div>
+
+                    {/* Sole owner prompt for copying */}
+                    {onCopySoleOwner && person.percentage === 100 && person.name && (
+                      <div className="mt-2 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            onCopySoleOwner(person);
+                            setCopiedStates(prev => ({ ...prev, [idx]: true }));
+                            setTimeout(() => {
+                              setCopiedStates(prev => ({ ...prev, [idx]: false }));
+                            }, 3000);
+                          }}
+                          className={`w-full py-2 ${
+                            copiedStates[idx] 
+                              ? 'bg-emerald-600 text-white hover:bg-emerald-700' 
+                              : 'bg-emerald-800 text-white hover:bg-emerald-900'
+                          } font-black text-[9px] uppercase tracking-widest rounded-xl transition-all shadow-md flex items-center justify-center gap-1`}
+                        >
+                          {copiedStates[idx] ? (
+                            <>✓ Sole Owner Synced to UBO & Signatories!</>
+                          ) : (
+                            <>★ Full Ownership Copy (Sync details to UBO & Signatories)</>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -208,12 +340,12 @@ interface ClientManagerProps {
   clients: Client[];
   totalCount: number;
   currentPage: number;
-  onPageChange: (page: number) => void;
+  onPageChange: (page: number, searchQuery?: string) => void;
   isRefreshing: boolean;
   onAddClient: (client: Client) => Promise<void>;
   onDeleteClient: (id: string) => Promise<void>;
   onUpdateClient: (client: Client) => Promise<void>;
-  onRefresh: () => void;
+  onRefresh: (searchQuery?: string) => void;
   onReScreen?: () => void;
   onAdvancedScreening?: (client: Client) => Promise<Client>;
   screeningProgress?: ScreeningProgress;
@@ -238,6 +370,8 @@ const ClientManager: React.FC<ClientManagerProps> = ({
   currentUserId 
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isProvisionMaximized, setIsProvisionMaximized] = useState(false);
+  const [isDossierMaximized, setIsDossierMaximized] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isScanningAdvanced, setIsScanningAdvanced] = useState(false);
@@ -253,8 +387,113 @@ const ClientManager: React.FC<ClientManagerProps> = ({
   const [showDocWarning, setShowDocWarning] = useState(false);
   const [pendingCommitClient, setPendingCommitClient] = useState<Client | null>(null);
 
+  React.useEffect(() => {
+    if (!selectedClient) {
+      setIsDossierMaximized(false);
+    }
+  }, [selectedClient]);
+
+  React.useEffect(() => {
+    if (!isModalOpen) {
+      setIsProvisionMaximized(false);
+    }
+  }, [isModalOpen]);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportToExcel = async () => {
+    setIsExporting(true);
+    try {
+      const allClients = await fetchAllCloudClientsForExport(currentUserRole, currentUserId, searchQuery);
+      
+      const rows = allClients.map(client => {
+        const directorsStr = (client["Directors Names"] || []).map(d => d.name + (d.authority ? ` (${d.authority})` : '')).join(', ');
+        const shareholdersStr = (client["Significant Shareholders"] || []).map(s => `${s.name} (${s.percentage || 0}%)`).join(', ');
+        const ubosStr = (client["UBO Details"] || []).map(u => u.name).join(', ');
+        const signatoriesStr = (client["Authorized Signatory"] || []).map(s => s.name).join(', ');
+        const servicesStr = (client["Services Provided"] || []).join(', ');
+
+        return {
+          'File Ref Number': client["No"] || '',
+          'Entity Name': client["Client Name"] || '',
+          'Status': client["Status"] || '',
+          'QFC No': client["QFC No"] || '',
+          'Legal Structure': client["Legal Structure"] || '',
+          'Jurisdiction (Nationality)': client["Company Nationality"] || '',
+          'Directors': directorsStr,
+          'Significant Shareholders': shareholdersStr,
+          'Ultimate Beneficial Owners (UBOs)': ubosStr,
+          'Authorized Signatories': signatoriesStr,
+          'Services Provided': servicesStr,
+          'Corporate Email': client["E Mail"] || '',
+          'Telephone': client["Telephone Number"] || '',
+          'Registered Address': client["Registered Address"] || '',
+          'Engagement Year': client["Engagement Year"] || '',
+          'Secretary': client["Secretary"] || '',
+          'Senior Executive': client["Senior Executive Function"] || '',
+          'Approved Auditor': client["Approved Auditor"] || '',
+          'Company Type': client["Company Type"] || '',
+          'License No': client["License"] || '',
+          'License Expiry': client["License Expiry"] || '',
+          'KYC Status': client.kyc_status || 'N/A'
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Clients Report');
+      
+      // Auto-fit columns
+      const maxColWidths = rows.reduce((acc, row) => {
+        Object.keys(row).forEach(key => {
+          const valStr = String((row as any)[key] || '');
+          acc[key] = Math.max(acc[key] || 10, valStr.length + 2);
+        });
+        return acc;
+      }, {} as Record<string, number>);
+      
+      worksheet['!cols'] = Object.keys(maxColWidths).map(key => ({
+        wch: Math.min(maxColWidths[key], 45)
+      }));
+
+      XLSX.writeFile(workbook, `Client_Registry_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (excelErr) {
+      console.error("Export failure:", excelErr);
+      alert("Export failed: " + (excelErr as any).message);
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleCopySoleOwner = (person: PersonRecord) => {
+    // Add to UBO Details & Authorized Signatories if not already there
+    const updatedUbo = [...(formData["UBO Details"] || [])];
+    const updatedSignatory = [...(formData["Authorized Signatory"] || [])];
+    
+    if (!updatedUbo.some(p => p.name === person.name)) {
+      updatedUbo.push({ ...person, authority: 'UBO, Shareholder' });
+    }
+    if (!updatedSignatory.some(p => p.name === person.name)) {
+      updatedSignatory.push({ ...person, authority: 'Authorized Signatory, Shareholder' });
+    }
+    
+    setFormData({
+      ...formData,
+      "UBO Details": updatedUbo,
+      "Authorized Signatory": updatedSignatory
+    });
+  };
+
   const totalPages = Math.ceil(totalCount / CLIENTS_PER_PAGE);
   const [formData, setFormData] = useState({ ...INITIAL_FORM_STATE });
+
+  const globalPeopleList: PersonRecord[] = [
+    ...(formData["Directors Names"] || []),
+    ...(formData["Significant Shareholders"] || []),
+    ...(formData["UBO Details"] || []),
+    ...(formData["Authorized Signatory"] || [])
+  ].filter((p, index, self) => p.name && self.findIndex(x => x.name === p.name) === index);
 
   const userRole = String(currentUserRole || '').toLowerCase();
   const isComplianceManager = userRole.includes('admin') || userRole.includes('compliance');
@@ -338,11 +577,21 @@ const ClientManager: React.FC<ClientManagerProps> = ({
     }
   };
 
-  const openProvisionModal = () => {
+  const openProvisionModal = async () => {
     setEditMode(false);
     // Generate the final ID for the new entity immediately to support document folder consistency
     const finalId = `RPME-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
-    setFormData({ ...INITIAL_FORM_STATE, id: finalId });
+    
+    // Asynchronously generate unique next file reference sequence from database
+    let fileRef = "";
+    try {
+      fileRef = await generateNextFileReference();
+    } catch (e) {
+      console.warn("[ClientManager] Reference number generator failed, using timestamp: ", e);
+      fileRef = `RP-${new Date().getFullYear()}-${Date.now().toString().slice(-4)}`;
+    }
+
+    setFormData({ ...INITIAL_FORM_STATE, id: finalId, "No": fileRef });
     setFormErrors([]);
     setIsModalOpen(true);
   };
@@ -381,6 +630,27 @@ const ClientManager: React.FC<ClientManagerProps> = ({
     }
 
     setIsSubmitting(true);
+    
+    // Duplicate Detection & Prevention Check
+    try {
+      const dupCheck = await checkClientDuplicate(
+        formData["Client Name"],
+        formData["QFC No"],
+        formData["No"],
+        editMode ? formData.id : undefined
+      );
+      if (dupCheck && dupCheck.isDuplicate) {
+        setSubmissionError(dupCheck.reason || "Duplicate detected. Please verify client name, QFC number or file reference.");
+        setIsSubmitting(false);
+        setTimeout(() => {
+          formRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 50);
+        return;
+      }
+    } catch (dupErr: any) {
+      console.warn("Unable to perform duplicate check, continuing...", dupErr);
+    }
+
     try {
       if (editMode) {
         await onUpdateClient(formData as Client);
@@ -478,7 +748,7 @@ const ClientManager: React.FC<ClientManagerProps> = ({
           >
              <Database size={18} /> Global DB Screen
           </button>
-          <button onClick={onRefresh} disabled={isRefreshing} className="p-4 text-gray-400 hover:text-emerald-800 bg-gray-50 rounded-xl transition-all shrink-0">
+          <button onClick={() => onRefresh()} disabled={isRefreshing} className="p-4 text-gray-400 hover:text-emerald-800 bg-gray-50 rounded-xl transition-all shrink-0">
             <RefreshCw size={24} className={isRefreshing ? 'animate-spin' : ''}/>
           </button>
           {isPrivileged && (
@@ -493,7 +763,49 @@ const ClientManager: React.FC<ClientManagerProps> = ({
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl sm:rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden relative z-0 flex flex-col">
+      <div className="bg-white rounded-2xl sm:rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden relative z-0 flex flex-col animate-in fade-in duration-300">
+        
+        {/* Search & Export Action Bar */}
+        <div className="p-6 bg-slate-50 border-b border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="relative w-full md:w-96">
+            <input
+              type="text"
+              placeholder="Search by name, ref, QFC No, or nationality..."
+              className="w-full bg-white border border-slate-200 rounded-xl px-10 py-3 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all text-slate-800 shadow-inner"
+              value={searchQuery}
+              onChange={(e) => {
+                const query = e.target.value;
+                setSearchQuery(query);
+                onRefresh(query);
+              }}
+            />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+            {searchQuery && (
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 font-black text-xs"
+                onClick={() => {
+                  setSearchQuery('');
+                  onRefresh('');
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 w-full md:w-auto shrink-0 justify-end">
+            <button
+              onClick={handleExportToExcel}
+              disabled={isExporting}
+              className="w-full md:w-auto px-5 py-3 bg-white hover:bg-slate-50 text-emerald-800 border border-slate-200 rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-sm flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {isExporting ? <Loader2 size={14} className="animate-spin text-emerald-800" /> : <Download size={14} />}
+              Export Registry to Excel
+            </button>
+          </div>
+        </div>
+
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left min-w-[1000px]">
             <thead>
@@ -506,7 +818,13 @@ const ClientManager: React.FC<ClientManagerProps> = ({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {clients.map(client => (
+              {clients.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center py-12 text-xs font-bold text-gray-400 uppercase tracking-widest bg-gray-50/30">
+                    No matching entities have been discovered
+                  </td>
+                </tr>
+              ) : clients.map(client => (
                 <tr key={client.id} className={`hover:bg-emerald-50/20 cursor-pointer transition-colors group ${!client.document_count ? 'bg-red-50/20' : ''}`} onClick={() => setSelectedClient(client)}>
                   <td className="px-6 sm:px-10 py-5 sm:py-6">
                     <div className="font-black text-emerald-950 text-sm tracking-tight flex items-center gap-2">
@@ -710,8 +1028,8 @@ const ClientManager: React.FC<ClientManagerProps> = ({
       {/* CLIENT DOSSIER MODAL */}
       {selectedClient && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xl z-[100] flex items-center justify-center p-4 sm:p-6">
-          <div className="bg-white rounded-[2.5rem] sm:rounded-[3.5rem] w-full max-w-5xl h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in zoom-in-95 duration-300">
-            <div className={`p-8 sm:p-12 text-white relative overflow-hidden shrink-0 ${selectedClient.riskLevel === RiskLevel.HIGH ? 'bg-red-900' : 'bg-emerald-900'}`}>
+          <div className={`bg-white overflow-hidden flex flex-col shadow-2xl transition-all duration-300 ${isDossierMaximized ? 'fixed inset-0 z-[110] w-full h-full rounded-none' : 'rounded-[2.5rem] sm:rounded-[3.5rem] w-full max-w-5xl h-[90vh]'}`}>
+            <div className={`p-8 sm:p-12 text-white relative overflow-hidden shrink-0 transition-all ${isDossierMaximized ? 'rounded-none' : ''} ${selectedClient.riskLevel === RiskLevel.HIGH ? 'bg-red-900' : 'bg-emerald-900'}`}>
                <div className="absolute top-0 right-0 p-12 opacity-5 pointer-events-none">
                   <Fingerprint size={160} />
                </div>
@@ -732,7 +1050,16 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                         {selectedClient["Client Name"]}
                      </h2>
                   </div>
-                  <button onClick={() => setSelectedClient(null)} className="p-4 bg-white/10 hover:bg-white/20 rounded-full transition-all"><X size={24} /></button>
+                  <div className="flex items-center gap-3 shrink-0">
+                     <button 
+                       onClick={() => setIsDossierMaximized(!isDossierMaximized)} 
+                       title={isDossierMaximized ? "Exit Full Screen" : "Expand to Full Screen"}
+                       className="p-4 bg-white/10 hover:bg-white/20 rounded-full transition-all flex items-center justify-center animate-out"
+                     >
+                       {isDossierMaximized ? <Minimize2 size={24} /> : <Maximize2 size={24} />}
+                     </button>
+                     <button onClick={() => setSelectedClient(null)} className="p-4 bg-white/10 hover:bg-white/20 rounded-full transition-all flex items-center justify-center"><X size={24} /></button>
+                  </div>
                </div>
             </div>
 
@@ -1013,7 +1340,17 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                      </h4>
                      <div className="grid grid-cols-1 gap-3">
                         <DetailRow label="Registered Address" value={selectedClient["Registered Address"]} icon={<MapPin size={16}/>} />
-                        <DetailRow label="Corporate Email" value={selectedClient["E Mail"]} icon={<Mail size={16}/>} />
+                        <DetailRow 
+                          label="Corporate Email" 
+                          value={
+                            <div className="flex flex-col gap-1 items-start">
+                              {String(selectedClient["E Mail"] || "").split(',').map((m: string) => m.trim()).filter(Boolean).map((em: string, idx: number) => (
+                                <a key={idx} href={`mailto:${em}`} className="text-emerald-750 hover:underline hover:text-emerald-950 font-bold block" onClick={e => e.stopPropagation()}>{em}</a>
+                              )) || <span className="text-gray-300 italic">Not Disclosed</span>}
+                            </div>
+                          } 
+                          icon={<Mail size={16}/>} 
+                        />
                         <DetailRow label="Telephone" value={selectedClient["Telephone Number"]} icon={<Phone size={16}/>} />
                         <DetailRow label="Website" value={selectedClient["Website"]} icon={<Globe size={16}/>} />
                      </div>
@@ -1057,12 +1394,22 @@ const ClientManager: React.FC<ClientManagerProps> = ({
 
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xl z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white rounded-t-[2rem] sm:rounded-[3rem] w-full max-w-7xl h-[92vh] sm:h-auto max-h-[95vh] overflow-hidden flex flex-col shadow-2xl animate-in slide-in-from-bottom-4">
+          <div className={`bg-white overflow-hidden flex flex-col shadow-2xl transition-all duration-300 ${isProvisionMaximized ? 'fixed inset-0 z-[110] w-full h-full rounded-none' : 'rounded-t-[2rem] sm:rounded-[3rem] w-full max-w-7xl h-[92vh] sm:h-auto max-h-[95vh]'}`}>
             <div className={`${editMode ? 'bg-amber-600' : 'bg-emerald-900'} p-6 sm:p-8 text-white flex justify-between items-center shrink-0`}>
               <h3 className="text-xl sm:text-2xl font-black tracking-tight uppercase">
                  {editMode ? 'Modify Registry Identity' : 'Provision Identity'}
               </h3>
-              <button onClick={() => setIsModalOpen(false)} className="bg-white/10 p-2.5 rounded-full"><X size={20}/></button>
+              <div className="flex items-center gap-3 shrink-0">
+                 <button 
+                   type="button"
+                   onClick={() => setIsProvisionMaximized(!isProvisionMaximized)} 
+                   title={isProvisionMaximized ? "Exit Full Screen" : "Expand to Full Screen"}
+                   className="bg-white/10 p-2.5 rounded-full hover:bg-white/20 transition-all flex items-center justify-center"
+                 >
+                   {isProvisionMaximized ? <Minimize2 size={20} /> : <Maximize2 size={20} />}
+                 </button>
+                 <button type="button" onClick={() => setIsModalOpen(false)} className="bg-white/10 p-2.5 rounded-full hover:bg-white/20 transition-all flex items-center justify-center"><X size={20}/></button>
+              </div>
             </div>
             <form ref={formRef} onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto p-6 sm:p-10 space-y-8 custom-scrollbar bg-gray-50/30 pb-24">
               {submissionError && (
@@ -1082,7 +1429,10 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                 <div className="sm:col-span-2">
                   <InputField label="Entity Legal Name" value={formData["Client Name"]} onChange={(v:any)=>setFormData({...formData, "Client Name": v})} required hasError={formErrors.includes("Client Name")} />
                 </div>
-                <InputField label="File Reference" value={formData["No"]} onChange={(v:any)=>setFormData({...formData, "No": v})} required hasError={formErrors.includes("No")} />
+                <div className="relative">
+                  <InputField label="File Reference" value={formData["No"]} onChange={(v:any)=>setFormData({...formData, "No": v})} required hasError={formErrors.includes("No")} disabled={true} />
+                  <span className="absolute right-3 top-10 text-[7px] font-black uppercase text-emerald-800 tracking-wider bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-150">Auto-Sequence</span>
+                </div>
                 <InputField label="Jurisdiction" value={formData["Company Nationality"]} onChange={(v:any)=>setFormData({...formData, "Company Nationality": v})} required hasError={formErrors.includes("Company Nationality")} />
                 <InputField label="Legal Structure" value={formData["Legal Structure"]} onChange={(v:any)=>setFormData({...formData, "Legal Structure": v})} />
                 <InputField label="QFC No" value={formData["QFC No"]} onChange={(v:any)=>setFormData({...formData, "QFC No": v})} />
@@ -1112,7 +1462,73 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                    <InputField label="Registered Address" value={formData["Registered Address"]} onChange={(v:any)=>setFormData({...formData, "Registered Address": v})} />
                 </div>
                 <InputField label="Telephone Number" value={formData["Telephone Number"]} onChange={(v:any)=>setFormData({...formData, "Telephone Number": v})} />
-                <InputField label="Email Address" type="email" value={formData["E Mail"]} onChange={(v:any)=>setFormData({...formData, "E Mail": v})} />
+                
+                {/* Allow users to add multiple email addresses safely and interactively */}
+                <div className="flex flex-col gap-1.5 sm:col-span-1 bg-slate-50 border border-slate-100 p-4 rounded-2xl">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block">Corporate Emails</label>
+                  <div className="flex flex-col gap-2">
+                    <div className="flex gap-2">
+                      <input
+                        type="email"
+                        placeholder="Add another email & press enter..."
+                        className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all text-slate-800"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const val = (e.currentTarget as HTMLInputElement).value.trim();
+                            if (val && val.includes('@')) {
+                              const existing = (formData["E Mail"] || "").split(',').map((m: string) => m.trim()).filter(Boolean);
+                              if (!existing.includes(val)) {
+                                setFormData({ ...formData, "E Mail": [...existing, val].join(', ') });
+                              }
+                              (e.currentTarget as HTMLInputElement).value = '';
+                            }
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          const input = (e.currentTarget.previousElementSibling as HTMLInputElement);
+                          const val = input.value.trim();
+                          if (val && val.includes('@')) {
+                            const existing = (formData["E Mail"] || "").split(',').map((m: string) => m.trim()).filter(Boolean);
+                            if (!existing.includes(val)) {
+                              setFormData({ ...formData, "E Mail": [...existing, val].join(', ') });
+                            }
+                            input.value = '';
+                          }
+                        }}
+                        className="px-3 bg-emerald-800 hover:bg-emerald-950 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all"
+                      >
+                        Add
+                      </button>
+                    </div>
+                    
+                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
+                      {(formData["E Mail"] || "").split(',').map((m: string) => m.trim()).filter(Boolean).map((email: string, eIdx: number) => (
+                        <span key={eIdx} className="inline-flex items-center gap-1.5 bg-white border border-slate-200 text-slate-800 px-2 py-1 rounded-lg text-[9px] font-black tracking-tight shadow-sm">
+                          {email}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const existing = (formData["E Mail"] || "").split(',').map((m: string) => m.trim()).filter(Boolean);
+                              const nextEmails = existing.filter((x: string) => x !== email);
+                              setFormData({ ...formData, "E Mail": nextEmails.join(', ') });
+                            }}
+                            className="text-slate-400 hover:text-red-600 transition-colors"
+                          >
+                            <X size={10} />
+                          </button>
+                        </span>
+                      ))}
+                      {(formData["E Mail"] || "").split(',').map((m: string) => m.trim()).filter(Boolean).length === 0 && (
+                        <span className="text-[9px] text-slate-400 italic font-medium ml-1">No email addresses listed.</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
                 <InputField label="Website" value={formData["Website"]} onChange={(v:any)=>setFormData({...formData, "Website": v})} />
               </FormSection>
 
@@ -1122,10 +1538,10 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                 <InputField label="Approved Auditor" value={formData["Approved Auditor"]} onChange={(v:any)=>setFormData({...formData, "Approved Auditor": v})} />
                 <div className="sm:col-span-3 h-px bg-gray-100 my-4" />
                 <div className="sm:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <PersonRecordManager title="Directors Names" records={formData["Directors Names"]} onUpdate={(v) => setFormData({...formData, "Directors Names": v})} />
-                  <PersonRecordManager title="Significant Shareholders" records={formData["Significant Shareholders"]} onUpdate={(v) => setFormData({...formData, "Significant Shareholders": v})} />
-                  <PersonRecordManager title="UBO Details" records={formData["UBO Details"]} onUpdate={(v) => setFormData({...formData, "UBO Details": v})} />
-                  <PersonRecordManager title="Authorized Signatories" records={formData["Authorized Signatory"]} onUpdate={(v) => setFormData({...formData, "Authorized Signatory": v})} />
+                  <PersonRecordManager title="Directors Names" records={formData["Directors Names"]} onUpdate={(v) => setFormData({...formData, "Directors Names": v})} globalPeopleList={globalPeopleList} />
+                  <PersonRecordManager title="Significant Shareholders" records={formData["Significant Shareholders"]} onUpdate={(v) => setFormData({...formData, "Significant Shareholders": v})} globalPeopleList={globalPeopleList} onCopySoleOwner={handleCopySoleOwner} />
+                  <PersonRecordManager title="UBO Details" records={formData["UBO Details"]} onUpdate={(v) => setFormData({...formData, "UBO Details": v})} globalPeopleList={globalPeopleList} />
+                  <PersonRecordManager title="Authorized Signatories" records={formData["Authorized Signatory"]} onUpdate={(v) => setFormData({...formData, "Authorized Signatory": v})} globalPeopleList={globalPeopleList} />
                 </div>
               </FormSection>
 

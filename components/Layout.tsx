@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect } from 'react';
-import { LayoutDashboard, Users, Globe, FileText, Settings, Menu, X, Wifi, WifiOff, LogOut, ShieldCheck, Clock, RefreshCw, AlertTriangle, ChevronRight, Share2, Database, Shield, Activity, Beaker, ShieldAlert, Terminal } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { LayoutDashboard, Users, Globe, FileText, Settings, Menu, X, Wifi, WifiOff, LogOut, ShieldCheck, Clock, RefreshCw, AlertTriangle, ChevronRight, Share2, Database, Shield, Activity, Beaker, ShieldAlert, Terminal, Maximize2, Minimize2 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { UserProfile, UserRole, SystemEnvironment, APP_VERSION } from '../types';
 
@@ -33,6 +33,27 @@ const Layout: React.FC<LayoutProps> = ({
   const [isDiagOpen, setIsDiagOpen] = useState(false);
   const [registryStats, setRegistryStats] = useState({ lastSourceUpdate: 'Never' });
   const location = useLocation();
+
+  const layoutRef = useRef<HTMLDivElement>(null);
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  const toggleFullscreen = () => {
+    setIsExpanded(prev => !prev);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && (e.key === 'f' || e.key === 'F')) {
+        e.preventDefault();
+        toggleFullscreen();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
 
   const PRIMARY_LOGO = "https://raw.githubusercontent.com/AnasQandeel/RPME-Logo/main/RPME%20Logo.png";
   const LOCAL_LOGO = "/images/logo.png";
@@ -94,14 +115,14 @@ const Layout: React.FC<LayoutProps> = ({
   const isProd = environment === SystemEnvironment.PRODUCTION;
 
   return (
-    <div className="flex h-screen bg-[#f8fafc] text-gray-900 overflow-hidden font-sans">
+    <div ref={layoutRef} className="flex h-screen bg-[#f8fafc] text-gray-900 overflow-hidden font-sans">
       <div className={`fixed top-0 left-0 right-0 h-1 z-[100] transition-colors duration-500 ${isSafeMode ? 'bg-red-500 animate-pulse' : !isProd ? 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]' : isCloudConnected ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-gray-300'}`} />
 
       {isSidebarOpen && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 xl:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-100 flex flex-col transition-transform duration-300 xl:relative xl:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-white border-r border-slate-100 flex flex-col transition-transform duration-300 xl:relative xl:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} ${isExpanded ? 'hidden xl:hidden' : ''}`}>
         <div className="p-8">
           <BrandLogo size="h-12" />
           <div className="mt-4 text-center">
@@ -141,7 +162,7 @@ const Layout: React.FC<LayoutProps> = ({
       </aside>
 
       <main className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-20 bg-white border-b border-slate-100 flex items-center justify-between px-8 shrink-0">
+        <header className={`h-20 bg-white border-b border-slate-100 flex items-center justify-between px-8 shrink-0 transition-all ${isExpanded ? 'hidden' : ''}`}>
           <div className="flex items-center gap-4">
             <button className="p-2 -ml-2 text-slate-400 hover:text-emerald-950 xl:hidden" onClick={() => setSidebarOpen(true)}>
               <Menu size={24} />
@@ -164,8 +185,17 @@ const Layout: React.FC<LayoutProps> = ({
                 <span className="text-[9px] font-black uppercase tracking-widest">Sandbox Protocol</span>
               </div>
             )}
+
+            <button
+              onClick={toggleFullscreen}
+              title="Expand screen to full view (Alt+F)"
+              className="flex items-center gap-2 px-4 py-2.5 bg-gray-50 hover:bg-emerald-50 text-emerald-950 border border-slate-200 hover:border-emerald-200 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shadow-sm"
+            >
+              <Maximize2 size={13} className="text-emerald-800" />
+              <span className="hidden sm:inline">Full Screen</span>
+            </button>
             
-            <div className="flex items-center gap-4 border-l border-slate-100 pl-6">
+            <div className="flex items-center gap-4 border-l border-slate-100 pl-6 border-slate-150">
               <div className="text-right">
                 <p className="text-[11px] font-black uppercase text-slate-950">{currentUser.full_name}</p>
                 <p className="text-[9px] font-black uppercase text-slate-400 tracking-tighter">{currentUser.role}</p>
@@ -177,7 +207,7 @@ const Layout: React.FC<LayoutProps> = ({
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <div className={`flex-1 overflow-y-auto ${isExpanded ? 'p-4 sm:p-6' : 'p-8'} custom-scrollbar`}>
           {isSafeMode && (
             <div className="mb-8 p-6 bg-red-50 border border-red-100 rounded-[2rem] flex items-center justify-between gap-6 animate-in slide-in-from-top-4">
                <div className="flex items-center gap-4">
@@ -208,18 +238,29 @@ const Layout: React.FC<LayoutProps> = ({
             </div>
           )}
 
-          <div className="max-w-7xl mx-auto pb-20">
+          <div className={`${isExpanded ? 'max-w-none w-full' : 'max-w-7xl mx-auto'} pb-20 transition-all duration-300`}>
             {children}
           </div>
         </div>
 
-        <footer className="h-10 bg-white border-t border-slate-100 flex items-center justify-between px-8 shrink-0 text-[8px] font-black text-slate-400 uppercase tracking-[0.2em]">
+        <footer className={`h-10 bg-white border-t border-slate-100 flex items-center justify-between px-8 shrink-0 text-[8px] font-black text-slate-400 uppercase tracking-[0.2em] ${isExpanded ? 'hidden' : ''}`}>
            <div className="flex items-center gap-4">
               <span className="flex items-center gap-1.5"><Terminal size={10}/> Node Cluster: DC-04</span>
               <span className="flex items-center gap-1.5"><Activity size={10}/> Registry Pulse: {isCloudConnected ? 'Optimal' : 'Interrupted'}</span>
            </div>
            <div>© RPME Limited LLC • v{APP_VERSION} • Governance Success Point</div>
         </footer>
+        {isExpanded && (
+          <div className="fixed top-4 right-4 z-[999] flex items-center gap-2 animate-in fade-in duration-300">
+            <button
+              onClick={toggleFullscreen}
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-900/90 hover:bg-black text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-2xl transition-all border border-slate-800 backdrop-blur-md"
+            >
+              <Minimize2 size={12} className="text-emerald-400 animate-pulse" />
+              Exit Full Screen
+            </button>
+          </div>
+        )}
       </main>
 
       {isDiagOpen && (

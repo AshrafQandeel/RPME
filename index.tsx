@@ -5,12 +5,17 @@
 (function() {
   try {
     const desc = Object.getOwnPropertyDescriptor(window, 'fetch');
-    if (desc && !desc.writable && !desc.set && desc.configurable) {
-      console.log("[ENV] Shadowing fetch to prevent read-only property errors.");
+    if (!desc || desc.configurable) {
+      console.log("[ENV] Shadowing fetch to prevent read-only property/getter errors.");
       const originalFetch = window.fetch;
+      let currentFetch = originalFetch;
       Object.defineProperty(window, 'fetch', {
-        value: originalFetch,
-        writable: true,
+        get() {
+          return currentFetch;
+        },
+        set(v) {
+          currentFetch = v;
+        },
         configurable: true,
         enumerable: true
       });
