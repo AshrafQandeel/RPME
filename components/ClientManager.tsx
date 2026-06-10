@@ -114,7 +114,9 @@ const PersonRecordManager = ({
         nationality: found.nationality,
         dob: found.dob,
         authority: found.authority || next[idx].authority || '',
-        percentage: found.percentage || next[idx].percentage || 0
+        percentage: found.percentage || next[idx].percentage || 0,
+        isCompany: found.isCompany || false,
+        crNumber: found.crNumber || ''
       };
       onUpdate(next);
     }
@@ -184,31 +186,79 @@ const PersonRecordManager = ({
                   </div>
                 )}
 
+                {/* Individual vs Company Selector */}
+                <div className="flex items-center justify-between border-b border-dashed border-slate-200 pb-2.5 mb-2 px-1">
+                  <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">{singularTitle} Type</span>
+                  <div className="flex gap-1 p-0.5 bg-slate-200/60 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updatePerson(idx, 'isCompany', false);
+                        updatePerson(idx, 'crNumber', '');
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all duration-200 ${
+                        !person.isCompany
+                          ? 'bg-white text-emerald-950 shadow-sm font-extrabold'
+                          : 'text-slate-500 hover:text-slate-800 font-bold'
+                      }`}
+                    >
+                      Individual
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        updatePerson(idx, 'isCompany', true);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-wider transition-all duration-200 ${
+                        person.isCompany
+                          ? 'bg-white text-emerald-950 shadow-sm font-extrabold'
+                          : 'text-slate-500 hover:text-slate-800 font-bold'
+                      }`}
+                    >
+                      Company
+                    </button>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-3 pr-6">
                   <input 
-                    placeholder="Full Name" 
+                    placeholder={person.isCompany ? "Company/Corporate Name" : "Full Name"} 
                     className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all" 
                     value={person.name || ''} 
                     onChange={e => updatePerson(idx, 'name', e.target.value)} 
                   />
+                  {person.isCompany ? (
+                    <input 
+                      placeholder="CR Number" 
+                      className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all font-mono" 
+                      value={person.crNumber || ''} 
+                      onChange={e => updatePerson(idx, 'crNumber', e.target.value)} 
+                    />
+                  ) : (
+                    <input 
+                      placeholder="ID / Passport" 
+                      className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all" 
+                      value={person.qid_passport || ''} 
+                      onChange={e => updatePerson(idx, 'qid_passport', e.target.value)} 
+                    />
+                  )}
                   <input 
-                    placeholder="ID / Passport" 
-                    className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all" 
-                    value={person.qid_passport || ''} 
-                    onChange={e => updatePerson(idx, 'qid_passport', e.target.value)} 
-                  />
-                  <input 
-                    placeholder="Nationality" 
+                    placeholder={person.isCompany ? "Jurisdiction of Incorporation" : "Nationality"} 
                     className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all" 
                     value={person.nationality || ''} 
                     onChange={e => updatePerson(idx, 'nationality', e.target.value)} 
                   />
-                  <input 
-                    type="date" 
-                    className="bg-white border border-slate-200 rounded-xl p-2.5 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all text-slate-700" 
-                    value={person.dob || ''} 
-                    onChange={e => updatePerson(idx, 'dob', e.target.value)} 
-                  />
+                  <div className="relative">
+                    <input 
+                      type="date" 
+                      className="w-full bg-white border border-slate-200 rounded-xl p-[9px] text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all text-slate-700" 
+                      value={person.dob || ''} 
+                      onChange={e => updatePerson(idx, 'dob', e.target.value)} 
+                    />
+                    <span className="absolute left-2.5 -top-1.5 px-1 bg-slate-50 text-[6.5px] font-black text-slate-400 uppercase tracking-widest leading-none">
+                      {person.isCompany ? "Int. Incorporation Date" : "Date of Birth"}
+                    </span>
+                  </div>
                   
                   {/* Multi-select Dropdown Option for Positions held */}
                   <div className="col-span-2 space-y-1 bg-slate-50 border border-slate-200/60 p-3 rounded-2xl">
@@ -322,8 +372,21 @@ const PersonDetailList = ({ title, records }: { title: string, records: PersonRe
         {records.map((r, i) => (
           <div key={i} className="flex justify-between items-center p-3 bg-white border border-gray-100 rounded-xl shadow-sm">
             <div className="min-w-0 flex-1">
-               <p className="text-xs font-bold text-emerald-950 truncate">{r.name}</p>
-               <p className="text-[8px] font-black text-gray-400 uppercase">{r.nationality || 'Jurisdiction N/A'} • {r.qid_passport || 'No ID'}</p>
+               <div className="flex items-center gap-1.5 flex-wrap">
+                 <p className="text-xs font-bold text-emerald-950 truncate">{r.name}</p>
+                 {r.isCompany && (
+                   <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 border border-amber-200/60 rounded text-[7px] font-black uppercase tracking-wider">Company</span>
+                 )}
+               </div>
+               {r.isCompany ? (
+                 <p className="text-[8px] font-black text-gray-400 uppercase">
+                   Jurisdiction: {r.nationality || 'N/A'} • CR: {r.crNumber || 'N/A'}
+                 </p>
+               ) : (
+                 <p className="text-[8px] font-black text-gray-400 uppercase">
+                   {r.nationality || 'Jurisdiction N/A'} • {r.qid_passport || 'No ID'}
+                 </p>
+               )}
             </div>
             <div className="text-right shrink-0 ml-4">
                {r.percentage ? <span className="text-[10px] font-black text-emerald-700">{r.percentage}%</span> : null}

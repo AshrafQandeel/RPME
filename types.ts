@@ -59,6 +59,8 @@ export interface PersonRecord {
   dob: string;
   authority?: string;
   percentage?: number;
+  isCompany?: boolean;
+  crNumber?: string;
 }
 
 export interface SanctionEntry {
