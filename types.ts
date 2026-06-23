@@ -138,6 +138,15 @@ export interface ScreeningProgress {
   currentBatch: number;
 }
 
+export interface ServiceEngagement {
+  id: string;
+  serviceName: string;
+  engagementDate: string;
+  completionDate?: string;
+  invoiceNumber?: string;
+  invoiceDate?: string;
+}
+
 export interface Client {
   id: string;
   "No": string;
@@ -179,6 +188,7 @@ export interface Client {
   entity_type: EntityType;
   supabase_storage_path?: string;
   document_count?: number;
+  "Service Engagements"?: ServiceEngagement[];
 }
 
 export interface ClientDocument {

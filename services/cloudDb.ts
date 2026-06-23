@@ -163,18 +163,96 @@ const parseJsonArray = (val: any): any[] => {
   if (!val) return [];
   if (Array.isArray(val)) return val;
   if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (!trimmed) return [];
+
+    // Try standard JSON parse first to avoid butchering valid JSON objects starting with '{'
     try {
-      const parsed = JSON.parse(val);
+      const parsed = JSON.parse(trimmed);
       if (Array.isArray(parsed)) return parsed;
       if (typeof parsed === 'string') {
         const doubleParsed = JSON.parse(parsed);
         if (Array.isArray(doubleParsed)) return doubleParsed;
       }
+      if (parsed && typeof parsed === 'object') {
+        return [parsed];
+      }
     } catch (e) {
-      console.error("[CloudDB] JSON parsing failed for value:", val, e);
+      // not a JSON array/object, proceed
     }
+
+    // Fallback to checking Postgres brace-enclosed array representation
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      const content = trimmed.slice(1, -1);
+      const items: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < content.length; i++) {
+        const char = content[i];
+        if (char === '"') {
+          inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+          items.push(current.trim());
+          current = '';
+        } else {
+          current += char;
+        }
+      }
+      if (current) items.push(current.trim());
+      return items.map(item => {
+        let clean = item;
+        if (clean.startsWith('"') && clean.endsWith('"')) {
+          clean = clean.slice(1, -1);
+        }
+        return clean.replace(/\\"/g, '"');
+      });
+    }
+
+    if (trimmed.includes(',')) {
+      return trimmed.split(',').map(s => s.trim()).filter(Boolean);
+    }
+    return [trimmed];
   }
-  return [];
+  return [val];
+};
+
+const parseServiceEngagements = (servicesRow: any, defaultEngagementDate: string): any[] => {
+  const list = parseJsonArray(servicesRow);
+  const engagements: any[] = [];
+  list.forEach((item: any, idx: number) => {
+    let parsedItem = item;
+    if (typeof item === 'string' && item) {
+      try {
+        const parsed = JSON.parse(item);
+        if (parsed && typeof parsed === 'object') {
+          parsedItem = parsed;
+        }
+      } catch (e) {
+        // keep as raw string
+      }
+    }
+
+    if (parsedItem && typeof parsedItem === 'object' && parsedItem.serviceName) {
+      engagements.push({
+        id: parsedItem.id || `eng-${idx}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        serviceName: parsedItem.serviceName,
+        engagementDate: parsedItem.engagementDate || defaultEngagementDate || '',
+        completionDate: parsedItem.completionDate || '',
+        invoiceNumber: parsedItem.invoiceNumber || '',
+        invoiceDate: parsedItem.invoiceDate || ''
+      });
+    } else if (item && typeof item === 'string' && item) {
+      engagements.push({
+        id: `eng-${idx}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        serviceName: item,
+        engagementDate: defaultEngagementDate || '',
+        completionDate: '',
+        invoiceNumber: '',
+        invoiceDate: ''
+      });
+    }
+  });
+  return engagements;
 };
 
 const resolveFirstNonEmptyArrayValue = (...vals: any[]): any[] => {
@@ -219,7 +297,17 @@ export const fetchCloudClients = async (from: number, to: number, userRole?: str
     "Legal Structure": row["Legal Structure"] || row.legal_structure || row.legalStructure || row.structure || '',
     "Company Nationality": row["Company Nationality"] || row["Corporate Nationality "] || row.company_nationality || row.companyNationality || row.nationality || row.country || '',
     "Client Name": row["Client Name"] || row.client_name || row.clientName || row.name || row.full_name || '',
-    "Services Provided": parseJsonArray(row["Services Provided"] || row["Services needed"] || row.services_provided || row.servicesProvided || row.services),
+    "Services Provided": resolveFirstNonEmptyArrayValue(row.services_provided, row["Services Provided"], row["Services needed"], row.servicesProvided, row.services).map((item: any) => {
+      let parsed = item;
+      if (typeof item === 'string' && item) {
+        try {
+          const p = JSON.parse(item);
+          if (p && typeof p === 'object') parsed = p;
+        } catch (e) {}
+      }
+      return typeof parsed === 'object' ? parsed.serviceName : parsed;
+    }),
+    "Service Engagements": parseServiceEngagements(resolveFirstNonEmptyArrayValue(row.services_provided, row["Services Provided"], row["Services needed"], row.servicesProvided, row.services), row["Engagement Date"] || row.engagement_date || row.engagementDate || ''),
     "Engagement Year": row["Engagement Year"] || row["Engagement Year "] || row.engagement_year || row.engagementYear || row.year || '',
     "Engagement Date": row["Engagement Date"] || row.engagement_date || row.engagementDate || '',
     "Onboarding Date": row["Onboarding Date"] || row["Onboarding Date "] || row.onboarding_date || row.onboardingDate || '',
@@ -302,7 +390,17 @@ export const fetchAllCloudClientsForExport = async (userRole?: string, userId?: 
     "Legal Structure": row["Legal Structure"] || row.legal_structure || row.legalStructure || row.structure || '',
     "Company Nationality": row["Company Nationality"] || row["Corporate Nationality "] || row.company_nationality || row.companyNationality || row.nationality || row.country || '',
     "Client Name": row["Client Name"] || row.client_name || row.clientName || row.name || row.full_name || '',
-    "Services Provided": parseJsonArray(row["Services Provided"] || row["Services needed"] || row.services_provided || row.servicesProvided || row.services),
+    "Services Provided": resolveFirstNonEmptyArrayValue(row.services_provided, row["Services Provided"], row["Services needed"], row.servicesProvided, row.services).map((item: any) => {
+      let parsed = item;
+      if (typeof item === 'string' && item) {
+        try {
+          const p = JSON.parse(item);
+          if (p && typeof p === 'object') parsed = p;
+        } catch (e) {}
+      }
+      return typeof parsed === 'object' ? parsed.serviceName : parsed;
+    }),
+    "Service Engagements": parseServiceEngagements(resolveFirstNonEmptyArrayValue(row.services_provided, row["Services Provided"], row["Services needed"], row.servicesProvided, row.services), row["Engagement Date"] || row.engagement_date || row.engagementDate || ''),
     "Engagement Year": row["Engagement Year"] || row["Engagement Year "] || row.engagement_year || row.engagementYear || row.year || '',
     "Engagement Date": row["Engagement Date"] || row.engagement_date || row.engagementDate || '',
     "Onboarding Date": row["Onboarding Date"] || row["Onboarding Date "] || row.onboarding_date || row.onboardingDate || '',
@@ -381,7 +479,9 @@ export const upsertCloudClient = async (client: Client) => {
     legal_structure: client["Legal Structure"],
     company_nationality: client["Company Nationality"],
     client_name: client["Client Name"],
-    services_provided: client["Services Provided"],
+    services_provided: client["Service Engagements"] && client["Service Engagements"].length > 0 
+      ? client["Service Engagements"] 
+      : (client["Services Provided"] || []),
     engagement_year: client["Engagement Year"],
     engagement_date: client["Engagement Date"] || null,
     onboarding_date: client["Onboarding Date"] || null,

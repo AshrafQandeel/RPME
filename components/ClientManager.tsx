@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { Client, RiskLevel, KYCStatus, EntityType, UserRole, ScreeningProgress, PersonRecord } from '../types';
+import { Client, RiskLevel, KYCStatus, EntityType, UserRole, ScreeningProgress, PersonRecord, ServiceEngagement } from '../types';
 import { 
   Plus, Trash2, Eye, RefreshCw, X, CheckCircle2, Landmark, 
   FileText, Shield, Loader2, ScanSearch, 
@@ -19,7 +19,7 @@ const CLIENTS_PER_PAGE = 15;
 
 const INITIAL_FORM_STATE: any = {
   "No": "", "Status": "Pending", "QFC No": "", "Legal Structure": "", "Company Nationality": "",
-  "Client Name": "", "Services Provided": [], "Engagement Year": new Date().getFullYear().toString(), 
+  "Client Name": "", "Services Provided": [], "Service Engagements": [], "Engagement Year": new Date().getFullYear().toString(), 
   "Engagement Date": "", "Onboarding Date": new Date().toISOString().split('T')[0], 
   "Date of QFC Incorporation or Registration": "", "CR Expired date": "",
   "Entity Card No": "", "Entity Card Expiry": "", "License": "", "License Expiry": "",
@@ -346,6 +346,176 @@ const PersonRecordManager = ({
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ServiceEngagementManager = ({ 
+  records = [], 
+  onUpdate 
+}: { 
+  records?: ServiceEngagement[]; 
+  onUpdate: (recs: ServiceEngagement[]) => void;
+}) => {
+  const addEngagement = () => {
+    onUpdate([
+      ...records, 
+      { 
+        id: `eng-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`, 
+        serviceName: '', 
+        engagementDate: new Date().toISOString().split('T')[0],
+        completionDate: '',
+        invoiceNumber: '',
+        invoiceDate: ''
+      }
+    ]);
+  };
+
+  const removeEngagement = (index: number) => {
+    onUpdate(records.filter((_, i) => i !== index));
+  };
+
+  const updateEngagement = (index: number, field: keyof ServiceEngagement, value: any) => {
+    const next = [...records];
+    next[index] = { ...next[index], [field]: value };
+    onUpdate(next);
+  };
+
+  const PRESET_SERVICES = [
+    "Corporate Secretarial Services",
+    "Company Formation & Registration",
+    "Tax Compliance & Advisory",
+    "Accounting & Bookkeeping",
+    "PRO & Visa Services",
+    "Compliance & AML Screening",
+    "Regulatory Reporting",
+    "Audit Coordination Support",
+    "Fiduciary Services"
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center border-b border-gray-100 pb-2">
+         <label className="text-[10px] font-black text-emerald-850 uppercase tracking-widest">Service Engagements & Invoices</label>
+         <button 
+           type="button" 
+           onClick={addEngagement} 
+           className="px-3 py-1 bg-emerald-50 text-emerald-800 rounded-lg hover:bg-emerald-100 transition-all flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider shadow-sm"
+         >
+           <Plus size={12} /> Add Service
+         </button>
+      </div>
+      {records.length === 0 ? (
+        <button 
+          type="button" 
+          onClick={addEngagement} 
+          className="w-full py-8 border border-dashed border-slate-300 rounded-2xl text-center text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-emerald-850 hover:bg-emerald-50/40 hover:border-emerald-300 transition-all flex flex-col items-center justify-center gap-2 group bg-slate-50/30"
+        >
+          <div className="p-2.5 bg-white rounded-xl shadow-sm border border-slate-100 group-hover:bg-white group-hover:text-emerald-800 transition-all">
+            <Briefcase size={16} className="text-slate-400 group-hover:text-emerald-800 transition-colors" />
+          </div>
+          <span>Add Service Engagement Record</span>
+        </button>
+      ) : (
+        <div className="grid grid-cols-1 gap-4">
+          {records.map((eng, idx) => (
+            <div key={eng.id || idx} className="bg-slate-50/60 p-5 rounded-2xl border border-slate-100 relative group shadow-sm animate-in fade-in-50 zoom-in-95 duration-150">
+              <button 
+                type="button" 
+                onClick={() => removeEngagement(idx)} 
+                className="absolute top-4 right-4 p-1.5 text-slate-450 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all z-10"
+                title="Remove Service Engagement"
+              >
+                <Trash2 size={14} />
+              </button>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Service Name drop down / text input list */}
+                <div className="space-y-1">
+                  <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block">Selected Service Name</span>
+                  <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+                    <select
+                      className="bg-white border border-slate-200 rounded-xl px-2.5 py-2 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all text-slate-800 flex-1 min-w-[130px]"
+                      value={PRESET_SERVICES.includes(eng.serviceName) ? eng.serviceName : (eng.serviceName ? "CUSTOM" : "")}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "CUSTOM") {
+                          updateEngagement(idx, 'serviceName', '');
+                        } else {
+                          updateEngagement(idx, 'serviceName', val);
+                        }
+                      }}
+                    >
+                      <option value="" disabled>Select service...</option>
+                      {PRESET_SERVICES.map((serv, sIdx) => (
+                        <option key={sIdx} value={serv}>{serv}</option>
+                      ))}
+                      <option value="CUSTOM">★ Custom / Other Service</option>
+                    </select>
+                    
+                    {(!PRESET_SERVICES.includes(eng.serviceName) || eng.serviceName === '') && (
+                      <input
+                        type="text"
+                        placeholder="Type custom service..."
+                        className="flex-1 bg-white border border-slate-200 rounded-xl px-2.5 py-2 text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all text-slate-800"
+                        value={eng.serviceName}
+                        onChange={(e) => updateEngagement(idx, 'serviceName', e.target.value)}
+                        required
+                      />
+                    )}
+                  </div>
+                </div>
+
+                {/* Engagement Date input */}
+                <div className="relative">
+                  <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block mb-1">Engagement Date</span>
+                  <input 
+                    type="date"
+                    required
+                    className="w-full bg-white border border-slate-200 rounded-xl p-[9px] text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all text-slate-800"
+                    value={eng.engagementDate || ''}
+                    onChange={(e) => updateEngagement(idx, 'engagementDate', e.target.value)}
+                  />
+                </div>
+
+                {/* Completion Date input (Optional) */}
+                <div className="relative">
+                  <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block mb-1">Completion Date (Optional)</span>
+                  <input 
+                    type="date"
+                    className="w-full bg-white border border-slate-200 rounded-xl p-[9px] text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all text-slate-800"
+                    value={eng.completionDate || ''}
+                    onChange={(e) => updateEngagement(idx, 'completionDate', e.target.value)}
+                  />
+                </div>
+
+                {/* Invoice Fields Wrapper */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="relative">
+                    <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block mb-1">Invoice Number</span>
+                    <input 
+                      type="text"
+                      placeholder="INV-XXXX"
+                      className="w-full bg-white border border-slate-200 rounded-xl p-[9px] text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all font-mono text-slate-800"
+                      value={eng.invoiceNumber || ''}
+                      onChange={(e) => updateEngagement(idx, 'invoiceNumber', e.target.value)}
+                    />
+                  </div>
+                  <div className="relative">
+                    <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-widest block mb-1">Invoice Date</span>
+                    <input 
+                      type="date"
+                      className="w-full bg-white border border-slate-200 rounded-xl p-[9px] text-[11px] font-bold outline-none focus:ring-2 focus:ring-emerald-800 transition-all text-slate-800"
+                      value={eng.invoiceDate || ''}
+                      onChange={(e) => updateEngagement(idx, 'invoiceDate', e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -717,6 +887,9 @@ const ClientManager: React.FC<ClientManagerProps> = ({
     try {
       if (editMode) {
         await onUpdateClient(formData as Client);
+        if (selectedClient && selectedClient.id === formData.id) {
+          setSelectedClient(formData as Client);
+        }
       } else {
         const initialStatus = isDataEntry ? KYCStatus.PENDING_REVIEW : KYCStatus.DRAFT;
         const newClient: Client = { 
@@ -1436,6 +1609,85 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                     <PersonDetailList title="Authorized Signatories" records={selectedClient["Authorized Signatory"] || []} />
                   </div>
                </div>
+
+                {/* Services & Engagement History */}
+                <div className="space-y-6 pt-6 border-t border-gray-100">
+                   <h4 className="flex items-center gap-3 text-xs font-black uppercase tracking-widest text-emerald-900 border-b border-gray-100 pb-4">
+                      <Briefcase size={16}/> Service Engagements & Invoicing History
+                   </h4>
+                   
+                   {(!selectedClient["Service Engagements"] || selectedClient["Service Engagements"].length === 0) ? (
+                     <div className="text-center py-8 bg-gray-50/50 border border-dashed rounded-[1.5rem] flex flex-col items-center justify-center gap-2">
+                       <Briefcase size={22} className="text-gray-300" />
+                       <p className="text-[10px] font-black uppercase tracking-widest text-gray-400">No active services logged for this client</p>
+                     </div>
+                   ) : (
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                       {selectedClient["Service Engagements"].map((eng: ServiceEngagement, idx: number) => {
+                         const isInvoicePending = !eng.invoiceNumber;
+                         const isCompletionPending = !eng.completionDate;
+
+                         return (
+                           <div key={eng.id || idx} className="bg-gray-50/30 border border-gray-100 p-5 rounded-[1.5rem] space-y-3 relative hover:border-emerald-100 transition-all">
+                             <div className="flex justify-between items-start gap-4">
+                               <div>
+                                 <span className="text-[8px] font-black uppercase tracking-widest text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-100 inline-block mb-1.5">
+                                   Service #{idx + 1}
+                                 </span>
+                                 <h5 className="text-sm font-black text-emerald-950">{eng.serviceName || <span className="italic text-gray-300">Unnamed Service</span>}</h5>
+                               </div>
+                               
+                               <div className="flex flex-col gap-1 items-end">
+                                 <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                   isCompletionPending ? 'bg-amber-50 text-amber-600 border border-amber-100' : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                 }`}>
+                                   {isCompletionPending ? 'Active' : 'Completed'}
+                                 </span>
+                               </div>
+                             </div>
+
+                             <div className="grid grid-cols-2 gap-3 pt-2 text-[11px] border-t border-gray-100/60 leading-normal">
+                               <div>
+                                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Engagement Date</p>
+                                 <p className="font-extrabold text-emerald-950 flex items-center gap-1">
+                                   <Calendar size={11} className="text-slate-400" />
+                                   {eng.engagementDate ? new Date(eng.engagementDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : "Not specified"}
+                                 </p>
+                               </div>
+
+                               <div>
+                                 <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Completion Date</p>
+                                 <p className="font-extrabold text-emerald-950 flex items-center gap-1">
+                                   <CheckCircle size={11} className={isCompletionPending ? "text-slate-300" : "text-emerald-650"} />
+                                   {eng.completionDate ? new Date(eng.completionDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : <span className="text-gray-300 italic">In progress</span>}
+                                 </p>
+                               </div>
+
+                               {eng.invoiceNumber ? (
+                                 <div className="col-span-2 mt-1.5 p-3 bg-white/70 rounded-xl border border-gray-100 flex justify-between items-center">
+                                   <div>
+                                     <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Invoice Details</p>
+                                     <p className="font-mono text-xs font-black text-slate-800">{eng.invoiceNumber}</p>
+                                   </div>
+                                   <div className="text-right">
+                                     <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Invoice Date</p>
+                                     <p className="font-extrabold text-slate-600">
+                                       {eng.invoiceDate ? new Date(eng.invoiceDate).toLocaleDateString(undefined, { dateStyle: 'medium' }) : "Not specified"}
+                                     </p>
+                                   </div>
+                                 </div>
+                               ) : (
+                                 <div className="col-span-2 mt-1.5 p-2 bg-slate-100/40 border border-slate-100 rounded-xl text-center text-[9px] font-semibold text-slate-400 uppercase tracking-widest">
+                                   No invoice generated yet
+                                 </div>
+                               )}
+                             </div>
+                           </div>
+                         );
+                       })}
+                     </div>
+                   )}
+                </div>
             </div>
 
             <div className="p-8 sm:p-10 bg-white border-t border-gray-100 flex justify-end items-center gap-6 shrink-0">
@@ -1510,6 +1762,13 @@ const ClientManager: React.FC<ClientManagerProps> = ({
                 <InputField label="Engagement Date" type="date" value={formData["Engagement Date"]} onChange={(v:any)=>setFormData({...formData, "Engagement Date": v})} />
                 <InputField label="Onboarding Date" type="date" value={formData["Onboarding Date"]} onChange={(v:any)=>setFormData({...formData, "Onboarding Date": v})} />
                 <InputField label="Incorporation Date" type="date" value={formData["Date of QFC Incorporation or Registration"]} onChange={(v:any)=>setFormData({...formData, "Date of QFC Incorporation or Registration": v})} />
+              </FormSection>
+
+              <FormSection title="Service Engagements & Invoices" icon={<Briefcase size={18}/>} fullWidth={true}>
+                <ServiceEngagementManager 
+                  records={formData["Service Engagements"] || []} 
+                  onUpdate={(v) => setFormData({...formData, "Service Engagements": v})} 
+                />
               </FormSection>
 
               <FormSection title="Licensing & Documentation" icon={<FileBadge size={18}/>}>
